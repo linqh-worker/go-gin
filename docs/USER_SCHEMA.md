@@ -23,11 +23,11 @@ Go 不要求表名前缀。表名是项目和数据库的约定，不是语言�
 | password_hash | VARCHAR(100)，可空 | bcrypt 密码哈希；旧账号没有密码时为空 |
 | nickname | VARCHAR(50)，默认空串 | 昵称，新注册默认使用用户名 |
 | avatar_url | VARCHAR(255)，默认空串 | 头像地址；不包含上传功能 |
-| phone | VARCHAR(32)，可空 | 手机号资料，保存不代表已验证 |
-| email | VARCHAR(254)，可空 | 邮箱资料，保存不代表已验证 |
+| phone | VARCHAR(32)，非空，默认空串 | 手机号资料，保存不代表已验证 |
+| email | VARCHAR(254)，非空，默认空串 | 邮箱资料，保存不代表已验证 |
 | gender | TINYINT UNSIGNED，默认0 | 0未知、1男、2女 |
-| age | INT，可空 | 保留已有年龄字段，兼容原示例 |
-| status | INT，可空，默认1 | 仅1允许登录，其他值不允许 |
+| age | INT，非空，默认0 | 保留已有年龄字段，兼容原示例 |
+| status | INT，非空，默认1 | 仅1允许登录，其他值不允许 |
 | register_ip | VARCHAR(45)，默认空串 | 注册时的直连客户端 IP，兼容 IPv6 |
 | last_login_at | DATETIME，可空 | 最近登录时间，历史记录未知为空 |
 | last_login_ip | VARCHAR(45)，默认空串 | 最近登录的直连客户端 IP |
@@ -81,3 +81,9 @@ go vet ./...
 DAO 生成器现在为 `password_hash` 生成 `json:"-"`，避免意外序列化密码哈希；正式接口仍通过 response 响应结构明确控制字段。
 
 原迁移集成测试文件已清除，当前没有对应测试命令。需要实际验证表结构时，在独立开发或测试库执行并检查，不操作生产数据。
+
+## 默认值规范更新
+
+默认值直接维护在原初始化文件 create_user_baseline_20261030080000.go：手机号、邮箱默认空字符串，年龄默认0，状态默认1，以上字段不允许 NULL。注册显式初始化这些值及创建、更新时间。未登录时间和软删除时间继续保留 NULL。
+
+CREATE TABLE IF NOT EXISTS 只影响新建表，不会修改已存在的表。

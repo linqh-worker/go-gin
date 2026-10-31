@@ -3,13 +3,12 @@
 默认示例地址为 `http://127.0.0.1:8088`，实际端口以配置为准。认证使用用户名、密码和图片验证码；不包含短信、邮件或后台管理员认证。
 先按 [README](../README.md) 准备数据库、Redis 并启动 HTTP。
 
-密码字段已强制使用请求体密文。先生成持久化密钥，获取公钥并按 [PASSWORD_ENCRYPTION.md](PASSWORD_ENCRYPTION.md) 的前端示例加密；下方请求仅展示字段结构，不能直接复制示例密文或时间戳。
+密码直接通过 JSON 字符串提交，不需要公钥或 encryption 参数。数据库继续使用 bcrypt 哈希；部署使用 HTTPS。
 
 ## 接口表
 
 | 方法 | 路径 | 登录要求 |
 | --- | --- | --- |
-| GET | /api/auth/public-key | 无，获取当前密码传输公钥与 key_id |
 | GET | /api/captcha?purpose=register | 无，注册图片验证码 |
 | GET | /api/captcha?purpose=login | 无，登录图片验证码 |
 | POST | /api/register | 无，创建用户 |
@@ -26,17 +25,17 @@
 
 ```json
 {
-  "status": 200,
+  "code": 200,
   "msg": "成功",
   "data": {},
   "requestId": "追踪标识"
 }
 ```
 
-外层 status 是业务码，成功为200。业务失败通常 HTTP 状态仍为200，需要判断外层 status；身份失效返回 HTTP 401，限流429，基础服务异常500或503。
+外层 code 是业务码，成功为200。业务失败通常 HTTP 状态仍为200，需要判断外层 code；身份失效返回 HTTP 401，限流429，基础服务异常500或503。
 直接在测试里创建 httpx.New() 不会自动调用入口的初始化；正式接口测试要显式调用 config.InitGlobalVars() 才能验证相同字段。
 
-| 外层 status | 含义 |
+| 外层 code | 含义 |
 | --- | --- |
 | 200 | 成功 |
 | 10001 | 当前认证控制器的通用参数/业务校验错误 |
@@ -44,14 +43,11 @@
 | 20005 | 账号已停用 |
 | 20006 | 验证码错误、过期或已使用 |
 | 20007 | 用户名已存在 |
-| 20008 | 密文、密钥版本或 encryption 参数无效 |
-| 20009 | 加密请求已过期 |
-| 20010 | 重复加密请求，请重新加密后提交 |
 | 401 | 需要重新登录 |
 | 429 | 请求次数超过限额 |
 
 参数绑定不再统一提示“请检查注册参数、两次密码和5位验证码”：验证码缺失、格式错误或答案校验失败使用20006，并明确提示对应字段；确认密码不一致单独提示。JSON 格式错误、密码长度等仍使用10001。
-业务顺序为参数绑定、密码解密与防重放、明文规则及验证码、账号密码校验；多项错误时返回先检查到的问题。
+业务顺序为参数绑定、密码规则及验证码、账号密码校验；多项错误时返回先检查到的问题。
 
 ## 获取验证码
 
@@ -84,15 +80,10 @@ Content-Type: application/json
 {
   "username": "alice_1",
   "nickname": "小明",
-  "password": "RSA-OAEP标准Base64密文",
-  "password_confirmation": "独立加密的确认密码密文",
+  "password": "ExamplePass123!",
+  "password_confirmation": "ExamplePass123!",
   "captcha_id": "注册验证码ID",
-  "captcha_code": "12345",
-  "encryption": {
-    "key_id": "公钥接口返回的版本",
-    "timestamp": 1793436000,
-    "nonce": "每次提交生成的32位随机十六进制字符串"
-  }
+  "captcha_code": "12345"
 }
 ```
 
@@ -100,11 +91,11 @@ Content-Type: application/json
 
 - username：3至32位字母、数字或下划线，业务层转为小写并去掉首尾空白。
 - nickname：可选，最多50字符；空值默认用户名，不要求唯一。
-- password：传输时为密文；解密后至少8个字符、UTF-8编码不超过72字节。两次密码在解密后比较。
+- password：直接提交密码，至少8个字符、UTF-8编码不超过72字节。注册时两次密码必须一致。
 - captcha_code：字符串格式的5位数字，保留前导零。
 
 密码以 bcrypt 保存；新用户状态固定为1。客户端无法指定权限、账号状态、用户ID、密码哈希和记录IP。
-注册返回用户信息，不自动登录。用户名唯一性由数据库唯一索引约束，并发重复注册也返回业务错误。
+注册成功后自动登录，返回与登录相同的 token、token_type、expires_in 和 user，并记录首次登录时间、IP和次数。用户名唯一性由数据库唯一索引约束，并发重复注册也返回业务错误。
 ClientIP 是服务端内部参数，JSON 不接受该字段。
 
 ## 登录
@@ -119,18 +110,13 @@ Content-Type: application/json
 ```json
 {
   "username": "alice_1",
-  "password": "RSA-OAEP标准Base64密文",
+  "password": "ExamplePass123!",
   "captcha_id": "登录验证码ID",
-  "captcha_code": "12345",
-  "encryption": {
-    "key_id": "公钥接口返回的版本",
-    "timestamp": 1793436000,
-    "nonce": "每次提交生成的32位随机十六进制字符串"
-  }
+  "captcha_code": "12345"
 }
 ```
 
-成功响应 data 的结构如下，user 展示完整字段；时间仅为格式示例：
+注册与登录成功响应 data 的结构相同，如下，user 展示完整字段；时间仅为格式示例：
 
 ```json
 {
@@ -145,13 +131,13 @@ Content-Type: application/json
     "phone": null,
     "email": null,
     "gender": 0,
-    "last_login_at": "2026-10-31T10:00:00+08:00",
+    "last_login_at": "2026-10-31 10:00:00",
     "last_login_ip": "127.0.0.1",
     "login_count": 1,
-    "updated_at": "2026-10-31T10:00:00+08:00",
+    "updated_at": "2026-10-31 10:00:00",
     "age": null,
     "status": 1,
-    "created_at": "2026-10-31T09:00:00+08:00"
+    "created_at": "2026-10-31 09:00:00"
   }
 }
 ```
@@ -203,3 +189,7 @@ Authorization: Bearer 随机Token
 | app/api/dao/auth.go | 用户端认证数据库访问 |
 
 表结构见 [USER_SCHEMA.md](USER_SCHEMA.md)，测试命令见 [COMMANDS.md](COMMANDS.md)。
+
+用户响应中的 last_login_at、created_at、updated_at 统一为北京时间（UTC+8）的 yyyy-MM-dd HH:mm:ss，数据库空时间返回 null。
+
+注册创建账号与 Redis 登录态不属于同一事务。若账号创建成功但签发 Token 或记录登录失败，接口返回错误，账号保留，可通过登录接口重试；失败时不返回 Token。

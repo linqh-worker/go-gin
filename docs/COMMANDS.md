@@ -27,7 +27,7 @@
 `go run ./cmd/make` 不带子命令会打印帮助并返回状态码1，不代表执行了生成。
 `cmd/make` 有多个源文件，必须使用包目录执行，不要写成 `go run cmd/make/main.go`。
 
-HTTP 首次运行前执行 make:auth-key。密钥备份恢复详见 [PASSWORD_ENCRYPTION.md](PASSWORD_ENCRYPTION.md)。
+HTTP 不再依赖密码传输密钥。密钥命令仅供维护历史文件，备份恢复详见 [PASSWORD_ENCRYPTION.md](PASSWORD_ENCRYPTION.md)。
 
 ## 配置参数
 

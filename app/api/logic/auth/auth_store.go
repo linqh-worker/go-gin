@@ -7,12 +7,13 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"github.com/google/uuid"
-	"github.com/mojocn/base64Captcha"
-	"github.com/redis/go-redis/v9"
 	authResponse "go-gin/app/api/response/auth"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/mojocn/base64Captcha"
+	"github.com/redis/go-redis/v9"
 )
 
 const captchaTTL = 2 * time.Minute

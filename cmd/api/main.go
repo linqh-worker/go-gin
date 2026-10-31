@@ -12,13 +12,11 @@ import (
 	"go-gin/internal/errorx"
 	"go-gin/internal/httpx"
 	"go-gin/internal/httpx/validators"
-	"go-gin/internal/passwordcrypto"
 	"go-gin/internal/queue"
 	_ "go-gin/internal/util"
 	"go-gin/middleware"
 	"go-gin/router"
 	"go-gin/util"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
@@ -32,10 +30,6 @@ func main() {
 	flag.Parse()
 
 	config.Init(*configFile)
-	if err := passwordcrypto.Init(config.GetAuthConf().PasswordPrivateKey); err != nil {
-		fmt.Fprintln(os.Stderr, "初始化密码传输密钥失败，请先执行 go run ./cmd/make make:auth-key：", err)
-		os.Exit(1)
-	}
 	config.InitGlobalVars()
 	config.InitEnvironment()
 

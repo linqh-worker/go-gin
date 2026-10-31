@@ -5,21 +5,11 @@ import (
 	authRequest "go-gin/app/api/request/auth"
 	"go-gin/const/errcode"
 	"go-gin/internal/httpx"
-	"go-gin/internal/passwordcrypto"
 )
 
 type loginController struct{}
 
 var LoginController = &loginController{}
-
-func (c *loginController) PublicKey(ctx *httpx.Context) (any, error) {
-	ctx.Header("Cache-Control", "no-store")
-	manager, err := passwordcrypto.Current()
-	if err != nil {
-		return nil, logic.HTTPError(err)
-	}
-	return manager.Public(), nil
-}
 
 func (c *loginController) Captcha(ctx *httpx.Context) (any, error) {
 	var req authRequest.CaptchaReq
@@ -38,11 +28,6 @@ func (c *loginController) Login(ctx *httpx.Context) (any, error) {
 	}
 	req.ClientIP = ctx.RemoteIP()
 	service := logic.NewAuthService()
-	plain, _, err := service.DecryptPasswords(ctx.Request.Context(), req.Encryption, "login", req.Username, req.Password, "")
-	if err != nil {
-		return nil, logic.HTTPError(err)
-	}
-	req.Password = plain
 	resp, err := service.Login(ctx.Request.Context(), req)
 	ctx.Header("Cache-Control", "no-store")
 	return resp, logic.HTTPError(err)
@@ -55,11 +40,6 @@ func (c *loginController) Register(ctx *httpx.Context) (any, error) {
 	}
 	req.ClientIP = ctx.RemoteIP()
 	service := logic.NewAuthService()
-	plain, confirmation, err := service.DecryptPasswords(ctx.Request.Context(), req.Encryption, "register", req.Username, req.Password, req.PasswordConfirmation)
-	if err != nil {
-		return nil, logic.HTTPError(err)
-	}
-	req.Password, req.PasswordConfirmation = plain, confirmation
 	resp, err := service.Register(ctx.Request.Context(), req)
 	return resp, logic.HTTPError(err)
 }

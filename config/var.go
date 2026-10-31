@@ -7,7 +7,7 @@ import (
 
 func InitGlobalVars() {
 	httpx.DefaultSuccessCodeValue = 200
-	httpx.CodeFieldName = "status"
+	httpx.CodeFieldName = "code"
 	httpx.ResultFieldName = "data"
 	httpx.MessageFieldName = "msg"
 	httpx.DefaultSuccessMessageValue = "成功"

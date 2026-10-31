@@ -84,7 +84,7 @@ System 只有公开 ping。后台增加敏感接口前要实现自己的管理�
 | 找不到 model/do 或 dao/internal | 是否漏提交生成文件；准备数据库后按指定表重新生成 |
 | Unknown column | 配置连接是否正确，表是否与迁移一致；建表快照不会修复旧表 |
 | 迁移 Nothing to migrate | 已登记执行或没有新迁移；改旧文件不会自动重跑 |
-| HTTP 200 但业务失败 | 检查外层 status 与 msg，不只看 HTTP 状态码 |
+| HTTP 200 但业务失败 | 检查外层 code 与 msg，不只看 HTTP 状态码 |
 | Token 无效 | Bearer 格式、是否退出/过期、Redis 登录态、用户是否停用或软删除 |
 | 任务不消费 | worker 是否运行、task/init.go 是否注册、两边 Redis 与队列名是否一致 |
 | 定时任务重复 | 是否同时启动多个 cron 进程 |

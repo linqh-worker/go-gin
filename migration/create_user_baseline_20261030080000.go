@@ -1,8 +1,9 @@
-// 根据当前配置数据库的 SHOW CREATE TABLE user 导出，仅包含结构，不包含账号数据。
+// 用户表初始化结构，默认值在此统一维护，不包含账号数据。
 package migration
 
 import (
 	"go-gin/internal/migration"
+
 	"gorm.io/gorm"
 )
 
@@ -19,13 +20,13 @@ func (m *CreateUserBaseline20261030080000) Up(db *gorm.DB) error {
 const userBaselineDDL = "CREATE TABLE IF NOT EXISTS `user` (\n" +
 	"  `id` int NOT NULL AUTO_INCREMENT,\n" +
 	"  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '用户名',\n" +
-	"  `age` int DEFAULT NULL COMMENT '年龄',\n" +
-	"  `status` int DEFAULT '1' COMMENT '状态',\n" +
+	"  `age` int NOT NULL DEFAULT '0' COMMENT '年龄',\n" +
+	"  `status` int NOT NULL DEFAULT '1' COMMENT '状态',\n" +
 	"  `password_hash` varchar(100) DEFAULT NULL COMMENT 'bcrypt密码哈希，旧账号为空',\n" +
 	"  `nickname` varchar(50) NOT NULL DEFAULT '' COMMENT '昵称',\n" +
 	"  `avatar_url` varchar(255) NOT NULL DEFAULT '' COMMENT '头像地址',\n" +
-	"  `phone` varchar(32) DEFAULT NULL COMMENT '手机号，保存资料不代表已验证',\n" +
-	"  `email` varchar(254) DEFAULT NULL COMMENT '邮箱，保存资料不代表已验证',\n" +
+	"  `phone` varchar(32) NOT NULL DEFAULT '' COMMENT '手机号，保存资料不代表已验证',\n" +
+	"  `email` varchar(254) NOT NULL DEFAULT '' COMMENT '邮箱，保存资料不代表已验证',\n" +
 	"  `gender` tinyint unsigned NOT NULL DEFAULT '0' COMMENT '性别：0未知，1男，2女',\n" +
 	"  `register_ip` varchar(45) NOT NULL DEFAULT '' COMMENT '注册时直连客户端IP',\n" +
 	"  `last_login_at` datetime DEFAULT NULL COMMENT '最近成功登录时间',\n" +
@@ -38,4 +39,4 @@ const userBaselineDDL = "CREATE TABLE IF NOT EXISTS `user` (\n" +
 	"  PRIMARY KEY (`id`),\n" +
 	"  UNIQUE KEY `uk_user_name` (`name`),\n" +
 	"  KEY `idx_user_status_created_at` (`status`,`created_at`)\n" +
-	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户端账号与资料'"
+	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户账号'"

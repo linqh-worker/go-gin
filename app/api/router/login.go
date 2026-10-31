@@ -7,9 +7,6 @@ import (
 )
 
 func RegisterLoginRoutes(r *httpx.RouterGroup) {
-	key := r.Group("")
-	key.Before(middleware.AuthRateLimit("public_key", 30))
-	key.GET("/auth/public-key", controller.LoginController.PublicKey)
 	captcha := r.Group("")
 	captcha.Before(middleware.AuthRateLimit("captcha", 30))
 	captcha.GET("/captcha", controller.LoginController.Captcha)

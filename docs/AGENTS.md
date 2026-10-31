@@ -11,10 +11,10 @@
 - 按业务建立 app/<module>/controller/<feature>、logic/<feature>、request/<feature>、response/<feature>。不恢复旧 typing 目录。
 - controller 处理绑定、身份提取、业务调用和响应映射；业务规则在 logic；数据库访问在模块 DAO 或共享 DAO。
 - logic/dao 接收 context.Context，不导入 Gin、controller 或 router。不用无必要的新层或接口包装简单逻辑。
-- 公开接口保持实际入口的 status/msg/data/requestId 外层格式。不要把 httpx 未初始化时的默认字段写成正式接口格式。
+- 公开接口保持实际入口的 code/msg/data/requestId 外层格式。不要把 httpx 未初始化时的默认字段写成正式接口格式。
 - request 字段必须显式定义，客户端不能设置账号状态、权限、密码哈希、当前身份或可信客户端IP。
 - 数据库实体不直接作为正式接口响应；通过 response 显式控制输出字段。
-- 登录注册密码字段必须经过 RSA-OAEP 解密边界，不增加明文兼容回退。密钥生成、版本加密备份和恢复集中在工具命令，不在业务请求中重新生成密钥。
+- 登录注册直接接收密码字符串，不要求 encryption；数据库保留 bcrypt 哈希，部署使用 HTTPS。
 - API 和 System 的认证独立。新增敏感后台路由前先实现管理员认证与权限，不复用 API Token 作为管理员凭据。
 - 查询和写入包含当前用户/资源归属条件，状态、唯一性、金额和重复提交等规则在服务端保证。
 

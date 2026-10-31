@@ -13,7 +13,7 @@
 | [开发规范](docs/DEVELOPMENT.md) | 统一分层、命名、接口、数据库和测试规则，含新增业务示例 |
 | [配置与部署](docs/CONFIGURATION.md) | YAML 配置、日志、运行进程、故障排查 |
 | [认证接口](docs/API_AUTH.md) | 注册、登录、图片验证码、当前用户、退出 |
-| [密码加密与密钥备份](docs/PASSWORD_ENCRYPTION.md) | 前端密文、公私钥持久化、版本备份与恢复 |
+| [密码加密与密钥备份](docs/PASSWORD_ENCRYPTION.md) | 已停用的历史加密方案说明 |
 | [用户表](docs/USER_SCHEMA.md) | 字段、索引、初始化迁移与表名前缀 |
 | [协作与提交](docs/CONTRIBUTING.md) | 分支、提交、GitHub 首次上传及变更交付 |
 | [AI 开发约定](docs/AGENTS.md) | 后续自动化修改必须遵守的项目规则 |
@@ -54,15 +54,7 @@ CREATE DATABASE demo CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
 创建数据库、账号和授权属于数据库准备工作，迁移命令不会自动创建数据库。
 
-HTTP 首次启动前生成持久化公私钥并创建加密版本备份：
-
-```powershell
-go run ./cmd/make make:auth-key
-go run ./cmd/make make:auth-key-backup
-```
-
-重复执行保留已有私钥。公钥和加密私钥归档到 config/keys/<key_id>/，可提交 Git；明文私钥、备份口令留在被忽略的 storage/keys/。
-请把备份口令另存到密码管理器，详见 [密钥恢复说明](docs/PASSWORD_ENCRYPTION.md)。新成员可生成自己的开发密钥，恢复原环境则使用对应版本备份和原口令。
+登录注册直接提交密码字符串，无需生成密钥或获取公钥；数据库继续保存 bcrypt 哈希。部署使用 HTTPS。
 
 ### 2. 初始化表结构
 
@@ -126,15 +118,15 @@ HTTP 启动入口叫 `cmd/api`，但同时提供 API 和 System 两个模块。�
 
 ```json
 {
-  "status": 200,
+  "code": 200,
   "msg": "成功",
   "data": {},
   "requestId": "请求追踪标识"
 }
 ```
 
-外层 `status` 是业务码。`data.status` 如果出现，是账号状态，两者含义不同。
-业务错误通常仍为 HTTP 200，调用方必须同时判断外层 `status`；未登录使用 HTTP 401，限流使用 HTTP 429。
+外层 `code` 是业务码。`data.status` 如果出现，是账号状态，两者含义不同。
+业务错误通常仍为 HTTP 200，调用方必须同时判断外层 `code`；未登录使用 HTTP 401，限流使用 HTTP 429。
 底层 httpx 未初始化时使用另一组默认字段，正式接口和接口测试应以入口初始化后的格式为准。
 
 ## 开发约定

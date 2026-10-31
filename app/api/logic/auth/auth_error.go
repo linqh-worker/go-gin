@@ -5,7 +5,6 @@ import (
 	"go-gin/app/api/dao"
 	"go-gin/const/errcode"
 	"go-gin/internal/errorx"
-	"go-gin/internal/passwordcrypto"
 	"net/http"
 )
 
@@ -19,12 +18,6 @@ func HTTPError(err error) error {
 		return biz
 	}
 	switch {
-	case errors.Is(err, passwordcrypto.ErrInvalid):
-		return errorx.New(20008, passwordcrypto.ErrInvalid.Error())
-	case errors.Is(err, passwordcrypto.ErrExpired):
-		return errorx.New(20009, passwordcrypto.ErrExpired.Error())
-	case errors.Is(err, passwordcrypto.ErrReplay):
-		return errorx.New(20010, passwordcrypto.ErrReplay.Error())
 	case errors.Is(err, ErrUnauthorized):
 		return errorx.NewServerError(http.StatusUnauthorized)
 	case errors.Is(err, ErrCredentials):

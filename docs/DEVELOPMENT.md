@@ -45,16 +45,16 @@ app/<module>/
 - JSON 写入使用显式 json 标签；GET 查询使用 form 标签；路径参数使用 uri 标签并单独绑定。
 - 必填、长度、范围、枚举等格式在 request 校验；用户名唯一、资源归属、账号状态、库存等在 logic/数据库保证。
 - 当前用户名登录请求至少8字符密码，bcrypt 输入不超过72字节；不能因加字段而绕过已有校验。
-- 登录注册请求中的密码先使用公钥加密，request 只校验密文格式；明文长度和确认密码一致性在解密后检查，不用 eqfield 比较随机密文。协议及密钥持久化见 [密码加密说明](PASSWORD_ENCRYPTION.md)。
+- 登录注册直接接收密码字符串，不要求 encryption；数据库保留 bcrypt 哈希，部署使用 HTTPS。
 - 当前用户ID来自 TokenCheck 写入的 user_id 或当前用户对象；客户端字段不能充当身份来源。
 - 可信IP、账号状态、权限、创建者、密码哈希由服务器赋值。不要新增接收这些字段的普通用户参数。
 - 分页接口统一采用 page（默认1）、page_size（默认20，最大100）；新接口在 request/logic 中实现默认值及上限，不假设框架自动分页。
 - 列表响应按需提供 items、total、page、page_size；空列表约定返回 []，并在转换处初始化切片。现有旧接口的 data 字段不擅自改名。
 - JSON 新字段统一 snake_case；外层 requestId 是既有兼容字段，保留当前形式。
 
-正式入口的外层格式固定为 `status/msg/data/requestId`。成功业务码为200，业务错误通常 HTTP 200，需要同时判断外层 status。
+正式入口的外层格式固定为 `code/msg/data/requestId`。成功业务码为200，业务错误通常 HTTP 200，需要同时判断外层 code。
 401 表示身份失效，403 表示权限不足，404 表示资源或路由不存在，429 表示限流；基础设施异常使用500/503。
-data.status 如果是账号状态，需要在接口文档中与外层 status 区分。
+data.status 如果是账号状态，需要在接口文档中与外层 code 区分。
 控制器返回 `(any, error)`，交给 httpx 统一写响应；不要既 ctx.JSON 又返回普通结果导致写两次。文件下载等流式响应沿用对应组件的专用处理方式。
 
 ## 4. 错误处理
@@ -202,3 +202,5 @@ private.GET("/user/greeting", controller.GreetingController.Show)
 - 交付说明写清改了什么、验证了什么、是否需要执行迁移、是否影响调用方。未完成的功能明确列出，不以目录或模板代替实现。
 
 完整命令见 [COMMANDS.md](COMMANDS.md)，提交规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+公共绑定错误使用 `internal/httpx/validation.Error(err, &req)`；需要验证码等专属提示时，先用 `validation.Normalize(err, &req)` 获取字段错误，匹配专属规则后，其余交给 `validation.Error(err, nil)`。此转换属于 controller 请求处理，不放 logic。

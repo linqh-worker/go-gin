@@ -53,7 +53,7 @@ HTTP 的实际加载顺序：
 
 1. `flag.Parse()` 解析 `-f`。
 2. `config.Init()` 读取 YAML，使用 `sync.Once` 在进程内初始化一次。
-3. `InitGlobalVars()` 设置 `status/msg/data/requestId`，`InitEnvironment()` 设置运行模式和时间配置。
+3. `InitGlobalVars()` 设置 `code/msg/data/requestId`，`InitEnvironment()` 设置运行模式和时间配置。
 4. 初始化日志 → MySQL → Redis → Asynq 投递客户端 → 事件监听器 → 外部服务客户端。
 5. 创建 httpx 引擎，挂载恢复、追踪、访问日志、数据库检查和项目全局中间件。
 6. `router.Init()` 显式挂载公共路由、`/api`、`/system`。

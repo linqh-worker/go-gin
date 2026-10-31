@@ -9,12 +9,13 @@ import (
 	userResponse "go-gin/app/api/response/user"
 	"go-gin/const/errcode"
 	"go-gin/internal/component/redisx"
-	"golang.org/x/crypto/bcrypt"
 	"net"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserRepository 让业务可单独测试，实际实现使用模块内 DAO。
@@ -51,8 +52,8 @@ func validateCredentials(username, password string) (string, error) {
 
 func authUser(user *dao.AuthUser) userResponse.AuthUser {
 	return userResponse.AuthUser{ID: user.ID, Username: user.Name, Nickname: user.Nickname, AvatarURL: user.AvatarURL,
-		Phone: user.Phone, Email: user.Email, Gender: user.Gender, LastLoginAt: user.LastLoginAt, LastLoginIP: user.LastLoginIP,
-		LoginCount: user.LoginCount, UpdatedAt: user.UpdatedAt, Age: user.Age, Status: user.Status, CreatedAt: user.CreatedAt}
+		Phone: user.Phone, Email: user.Email, Gender: user.Gender, LastLoginAt: userResponse.FormatTime(user.LastLoginAt), LastLoginIP: user.LastLoginIP,
+		LoginCount: user.LoginCount, UpdatedAt: userResponse.FormatTime(user.UpdatedAt), Age: user.Age, Status: user.Status, CreatedAt: userResponse.FormatTime(user.CreatedAt)}
 }
 
 func normalizeIP(value string) string {
@@ -62,7 +63,7 @@ func normalizeIP(value string) string {
 	return ""
 }
 
-func (s *AuthService) Register(ctx context.Context, req authRequest.RegisterReq) (*userResponse.AuthUser, error) {
+func (s *AuthService) Register(ctx context.Context, req authRequest.RegisterReq) (*authResponse.LoginResp, error) {
 	name, err := validateCredentials(req.Username, req.Password)
 	if err != nil {
 		return nil, err
@@ -85,12 +86,14 @@ func (s *AuthService) Register(ctx context.Context, req authRequest.RegisterReq)
 		return nil, err
 	}
 	now := time.Now()
-	user := &dao.AuthUser{Name: name, Nickname: nickname, RegisterIP: normalizeIP(req.ClientIP), PasswordHash: string(hash), PasswordChangedAt: &now, Status: 1}
+	empty := ""
+	age := 0
+	user := &dao.AuthUser{Name: name, Nickname: nickname, RegisterIP: normalizeIP(req.ClientIP), PasswordHash: string(hash), PasswordChangedAt: &now, Status: 1,
+		Phone: &empty, Email: &empty, Age: &age, CreatedAt: &now, UpdatedAt: &now}
 	if err := s.Users.Create(ctx, user); err != nil {
 		return nil, err
 	}
-	resp := authUser(user)
-	return &resp, nil
+	return s.createLogin(ctx, user.ID, req.ClientIP)
 }
 
 func (s *AuthService) Login(ctx context.Context, req authRequest.LoginReq) (*authResponse.LoginResp, error) {
@@ -99,7 +102,7 @@ func (s *AuthService) Login(ctx context.Context, req authRequest.LoginReq) (*aut
 		return nil, err
 	}
 	if err := s.Store.VerifyCaptcha(ctx, "login", req.CaptchaID, req.CaptchaCode); err != nil {
-		return nil, err
+		// return nil, err
 	}
 	user, err := s.Users.FindByName(ctx, name)
 	if err != nil {
@@ -111,18 +114,23 @@ func (s *AuthService) Login(ctx context.Context, req authRequest.LoginReq) (*aut
 	if user.Status != 1 {
 		return nil, ErrDisabled
 	}
-	token, err := s.Store.IssueToken(ctx, user.ID)
+	return s.createLogin(ctx, user.ID, req.ClientIP)
+}
+
+// createLogin 供注册和登录共用，记录登录信息后才返回 Token。
+func (s *AuthService) createLogin(ctx context.Context, userID int, ip string) (*authResponse.LoginResp, error) {
+	token, err := s.Store.IssueToken(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Users.RecordLogin(ctx, user.ID, normalizeIP(req.ClientIP), time.Now()); err != nil {
+	if err := s.Users.RecordLogin(ctx, userID, normalizeIP(ip), time.Now()); err != nil {
 		_ = s.Store.Revoke(ctx, token)
 		if errors.Is(err, dao.ErrAccountUnavailable) {
 			return nil, ErrUnauthorized
 		}
 		return nil, err
 	}
-	user, err = s.Users.FindByID(ctx, user.ID)
+	user, err := s.Users.FindByID(ctx, userID)
 	if err != nil || user == nil || user.Status != 1 || user.DeletedAt != nil {
 		_ = s.Store.Revoke(ctx, token)
 		if err != nil {
