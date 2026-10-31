@@ -1,0 +1,18 @@
+# 本地配置（示例配置提交仓库）
+.env
+.env.*
+!.env.example
+
+# 运行与编译产物
+*.exe
+*.test
+*.out
+/tmp
+/bin
+/.run
+/vendor
+/storage/logs/*
+/storage/keys/
+/logs
+
+# 表结构、DO、DAO底层及枚举生成代码随对应迁移一起提交，保证新克隆可编译。
