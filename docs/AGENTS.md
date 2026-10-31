@@ -7,7 +7,7 @@
 ## 固定约定
 
 - Go module 为 go-gin，最低版本1.26.1。未经任务要求不整体升级依赖或改 module 名。
-- HTTP 是单端口模块化应用，API 使用 /api，后台使用 /system。
+- HTTP 默认单端口模块化运行，支持 --module=all|api|system 与 --port 分端部署；API 使用 /api，后台使用 /system。
 - 按业务建立 app/<module>/controller/<feature>、logic/<feature>、request/<feature>、response/<feature>。不恢复旧 typing 目录。
 - controller 处理绑定、身份提取、业务调用和响应映射；业务规则在 logic；数据库访问在模块 DAO 或共享 DAO。
 - logic/dao 接收 context.Context，不导入 Gin、controller 或 router。不用无必要的新层或接口包装简单逻辑。

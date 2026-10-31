@@ -135,3 +135,11 @@ HTTP 启动入口叫 `cmd/api`，但同时提供 API 和 System 两个模块。�
 数据库字段变更先写迁移，再执行、生成 DAO、更新请求与响应。已执行并共享的迁移不重写；用户端与管理端身份校验分别实现。
 
 `.env.example` 可以提交；`.env`、环境私有配置、日志和二进制不提交。生成的 Go 代码随迁移一起提交，详见 [协作规范](docs/CONTRIBUTING.md)。
+
+后台管理员初始化与登录流程见 [后台认证](docs/SYSTEM_AUTH.md)。
+
+合并启动：go run ./cmd/api -f ./.env --module=all；分端启动增加 --module=api --port=:8088 或 --module=system --port=:8089，详见 [命令说明](docs/COMMANDS.md)。
+
+后台角色授权与权限中间件见 [RBAC 使用文档](docs/SYSTEM_RBAC.md)。
+
+后台目录、菜单、按钮的上下级结构与角色菜单授权见 [菜单树文档](docs/SYSTEM_MENU.md)。

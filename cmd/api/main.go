@@ -17,6 +17,9 @@ import (
 	"go-gin/middleware"
 	"go-gin/router"
 	"go-gin/util"
+	"net"
+	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
@@ -24,12 +27,28 @@ import (
 )
 
 var configFile = flag.String("f", "./.env", "the config file")
+var module = flag.String("module", "all", "加载模块：all、api、system")
+var portOverride = flag.String("port", "", "覆盖监听地址，如 :8088；默认使用配置 app.port")
 
 func main() {
 
 	flag.Parse()
+	if err := router.ValidateModule(*module); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
 	config.Init(*configFile)
+	port := config.GetAppConf().Port
+	if *portOverride != "" {
+		port = *portOverride
+	}
+	_, portText, err := net.SplitHostPort(port)
+	portNumber, numberErr := strconv.Atoi(portText)
+	if err != nil || numberErr != nil || portNumber < 1 || portNumber > 65535 {
+		fmt.Fprintln(os.Stderr, "监听地址无效，请使用 :8088 或 127.0.0.1:8088 这样的地址")
+		os.Exit(1)
+	}
 	config.InitGlobalVars()
 	config.InitEnvironment()
 
@@ -54,13 +73,15 @@ func main() {
 	engine := initHttpServer()
 
 	// 挂载监控
-	mountMonitor(engine)
+	if *module != "api" {
+		mountMonitor(engine)
+	}
 
 	// 启动http服务
-	port := config.GetAppConf().Port
-	fmt.Printf("Starting server at localhost%s...\n", port)
+	fmt.Printf("Starting server: module=%s address=%s\n", *module, port)
 	if err := engine.Run(port); err != nil {
-		fmt.Printf("Start server error,err=%v", err)
+		fmt.Fprintf(os.Stderr, "Start server error,err=%v\n", err)
+		os.Exit(1)
 	}
 }
 
@@ -74,7 +95,9 @@ func initHttpServer() *httpx.Engine {
 	engine := httpx.Default()
 	validators.Init()
 	middleware.Init(engine)
-	router.Init(engine)
+	if err := router.InitModule(engine, *module); err != nil {
+		panic(err)
+	}
 	return engine
 }
 

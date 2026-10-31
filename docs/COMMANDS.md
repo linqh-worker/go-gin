@@ -173,3 +173,50 @@ go install github.com/air-verse/air@v1.65.1
 
 安装后确保 Go 的 bin 目录位于 PATH，可用 `air -v` 查看。本机当前已安装，无需重复安装。
 Air 仅用于开发，退出按 Ctrl+C；不要同时运行普通 go run 和 Air 占用同一端口。
+
+创建管理员：设置 SYSTEM_ADMIN_PASSWORD 环境变量后执行 go run ./cmd/admin -f ./.env -username admin；完整步骤见 [后台认证](SYSTEM_AUTH.md)。
+
+## 合并运行与按端运行
+
+同一份程序通过启动参数选择模块；不传 module 时默认 all，保留原来的单端口方式。port 未传时使用 .env 的 app.port；传入时覆盖本次进程监听地址，不修改配置文件。
+
+```powershell
+# 本地合并启动
+go run ./cmd/api -f ./.env --module=all --port=:8088
+# 分别在两个终端启动
+go run ./cmd/api -f ./.env --module=api --port=:8088
+go run ./cmd/api -f ./.env --module=system --port=:8089
+```
+
+Linux 服务器使用与目标系统匹配的可执行文件：
+
+```bash
+# Linux 环境中编译
+go build -o go-gin ./cmd/api
+# 合并运行（选择一种部署方式即可）
+./go-gin -f ./.env --module=all --port=:8088
+# 或分别以两个进程运行
+./go-gin -f ./.env --module=api --port=:8088
+./go-gin -f ./.env --module=system --port=:8089
+```
+
+Windows 下交叉编译 Linux amd64：
+
+```powershell
+$env:GOOS = 'linux'
+$env:GOARCH = 'amd64'
+$env:CGO_ENABLED = '0'
+try { go build -o ./go-gin ./cmd/api } finally {
+    Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+}
+```
+
+目标机器为 ARM64 时将 GOARCH 改为 arm64。启动时配置文件相对于工作目录解析，服务器应配置正确的工作目录。
+
+两端保留 /api、/system 路径前缀，分端后不会变成 /login。/ 和 /status 是每个进程共有的公共接口。队列监控只在 all/system 模式挂载，继续使用原 IP 白名单。
+
+两个进程可共用数据库、Redis和配置文件，各自持有独立连接池；验证码、Token 和限流仍按端隔离。分端监听地址必须不同；HTTP 参数不会启动队列消费者或定时任务进程，它们继续按原命令独立运行。
+
+授予已有管理员超级管理员角色：go run ./cmd/admin -f ./.env -username admin --grant-super。需要先执行 RBAC 迁移，详见 [RBAC 文档](SYSTEM_RBAC.md)。
+
+补齐已有业务表注释：go run ./cmd/migrate -f ./.env。CompleteTableComments20261031220000 已覆盖用户、管理员、RBAC及菜单关联表；数据库客户端需刷新表结构才能显示最新注释。

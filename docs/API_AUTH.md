@@ -171,7 +171,7 @@ Authorization: Bearer 随机Token
 当前尚无用户资料编辑、密码找回、手机/邮箱验证接口；这些资料字段存在不代表已经验证。
 旧用户如果 password_hash 为空，不能通过密码登录；未实现自动初始化密码。
 原全表用户列表、添加和批量添加路由不再默认开放。`/api/demo/*` 是登录后的示例，不是后台管理授权。
-后台只有公开 `/system/ping`，用户端 Token 不承担管理员身份。
+后台认证见 [SYSTEM_AUTH.md](SYSTEM_AUTH.md)，用户端 Token 不承担管理员身份。
 
 ## 代码入口
 

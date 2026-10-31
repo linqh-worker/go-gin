@@ -9,6 +9,7 @@ import (
 	userResponse "go-gin/app/api/response/user"
 	"go-gin/const/errcode"
 	"go-gin/internal/component/redisx"
+	"go-gin/util"
 	"net"
 	"regexp"
 	"strings"
@@ -51,9 +52,22 @@ func validateCredentials(username, password string) (string, error) {
 }
 
 func authUser(user *dao.AuthUser) userResponse.AuthUser {
-	return userResponse.AuthUser{ID: user.ID, Username: user.Name, Nickname: user.Nickname, AvatarURL: user.AvatarURL,
-		Phone: user.Phone, Email: user.Email, Gender: user.Gender, LastLoginAt: userResponse.FormatTime(user.LastLoginAt), LastLoginIP: user.LastLoginIP,
-		LoginCount: user.LoginCount, UpdatedAt: userResponse.FormatTime(user.UpdatedAt), Age: user.Age, Status: user.Status, CreatedAt: userResponse.FormatTime(user.CreatedAt)}
+	return userResponse.AuthUser{
+		ID:          user.ID,
+		Username:    user.Name,
+		Nickname:    user.Nickname,
+		AvatarURL:   user.AvatarURL,
+		Phone:       user.Phone,
+		Email:       user.Email,
+		Gender:      user.Gender,
+		LastLoginAt: util.FormatTime(user.LastLoginAt),
+		LastLoginIP: user.LastLoginIP,
+		LoginCount:  user.LoginCount,
+		UpdatedAt:   util.FormatTime(user.UpdatedAt),
+		Age:         user.Age,
+		Status:      user.Status,
+		CreatedAt:   util.FormatTime(user.CreatedAt),
+	}
 }
 
 func normalizeIP(value string) string {
@@ -102,7 +116,7 @@ func (s *AuthService) Login(ctx context.Context, req authRequest.LoginReq) (*aut
 		return nil, err
 	}
 	if err := s.Store.VerifyCaptcha(ctx, "login", req.CaptchaID, req.CaptchaCode); err != nil {
-		// return nil, err
+		return nil, err
 	}
 	user, err := s.Users.FindByName(ctx, name)
 	if err != nil {

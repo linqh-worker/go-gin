@@ -204,3 +204,5 @@ private.GET("/user/greeting", controller.GreetingController.Show)
 完整命令见 [COMMANDS.md](COMMANDS.md)，提交规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 公共绑定错误使用 `internal/httpx/validation.Error(err, &req)`；需要验证码等专属提示时，先用 `validation.Normalize(err, &req)` 获取字段错误，匹配专属规则后，其余交给 `validation.Error(err, nil)`。此转换属于 controller 请求处理，不放 logic。
+
+新建业务表必须为表和每个字段添加中文 COMMENT，说明状态枚举、关联ID、空值和默认值含义。现有表注释补全由 CompleteTableComments20261031220000 执行，读取原列定义后仅更新注释。
