@@ -6,7 +6,7 @@ type ItemReq struct {
 	Version int64  `json:"version" binding:"required,gte=1"`
 }
 type SaveReq struct {
-	Items []ItemReq `json:"items" binding:"required,min=1,max=100,dive"`
+	Items []ItemReq `json:"items" binding:"required,min=1,max=1000,dive"`
 }
 
 type GroupReq struct {

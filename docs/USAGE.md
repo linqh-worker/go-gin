@@ -36,7 +36,7 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 | db.log-level | silent、debug、info、warn、error |
 | redis.addr、redis.username、redis.password、redis.db | 实际Redis实例、认证和逻辑库 |
 | log.level、log.path | 日志级别与根目录 |
-| monitor.white_ip_list | 队列监控访问IP白名单 |
+| monitor.white_ip_list | 队列监控直连IP白名单，不接受代理转发头 |
 | svc.user_url、svc.login_url | rest客户端请求的外部系统地址 |
 | auth.password_private_key | 历史密码传输密钥配置，当前HTTP认证不使用 |
 
@@ -68,7 +68,7 @@ go run ./cmd/api -f ./.env --module=api --port=:8088
 go run ./cmd/api -f ./.env --module=system --port=:8089
 ```
 
-module只接受all、api、system；port仅覆盖本次进程的监听地址，不修改文件。两个进程可以共用数据库、Redis及配置，HTTP路径仍是 `/api/...` 和 `/system/...`。每个进程都保留 `/`、`/status`，API模式不挂队列监控；all/system模式挂 `/monitor/queue/*`，受IP白名单保护。
+module只接受all、api、system；port仅覆盖本次进程的监听地址，不修改文件。两个进程可以共用数据库、Redis及配置，HTTP路径仍是 `/api/...` 和 `/system/...`。每个进程都保留 `/`、`/status`，API模式不挂队列监控；all/system模式挂 `/monitor/queue/*`，受直连IP白名单保护；监控不接受Forwarded、X-Forwarded-For或X-Real-IP转发头，请通过白名单直连或SSH隧道访问，不向公网反向代理暴露/monitor。
 
 模板端口下：
 
@@ -157,7 +157,7 @@ go run ./cmd/migrate -f ./.env
 
 当前migration目录包含六份Create、一份SeedSystem及后续增量迁移：空库得到六张业务表、migrations记录表、3个角色及27个菜单/接口节点。建表已有则跳过；同名角色不重新授权，菜单按编码或相同方法路径复用，不覆盖既有自定义配置。旧迁移执行记录保留。
 
-迁移按结构体名称末尾14位时间戳排序；已登记的不再执行。部分失败只打印后返回，退出码可能为0，必须检查日志及记录。当前无rollback、status、fresh、reset、step和并发迁移锁，也不自动从数据库导出迁移。
+迁移按结构体名称末尾14位时间戳排序；已登记的不再执行。配置读取、数据库连接或迁移失败均返回非零退出码；自动部署必须在失败时停止，仍需检查迁移输出及记录。当前无rollback、status、fresh、reset、step和并发迁移锁，也不自动从数据库导出迁移。
 
 新表开发：
 
@@ -515,7 +515,7 @@ try {
 
 ARM64机器将GOARCH改为arm64。配置路径相对于工作目录，部署时带上私有配置、固定工作目录，开启HTTPS并限制监控访问。先串行执行迁移、核对结果，再启动业务，worker/cron独立管理。
 
-HTTP目前直接Engine.Run，尚无完整服务超时、自定义优雅退出；迁移无并发锁/回滚，cron无跨副本锁。反向代理部署需明确可信代理：认证IP/限流用直连地址，监控白名单用Gin ClientIP，两者处理不同。
+HTTP目前直接Engine.Run，尚无完整服务超时、自定义优雅退出；迁移无并发锁/回滚，cron无跨副本锁。认证IP/限流使用直连地址；监控同样检查直连IP并拒绝代理转发头，不依赖Gin ClientIP解析转发头。
 
 首次上传GitHub：检查.env等私有文件确实被忽略，再审查暂存内容、提交及配置实际远端。已有Git历史或origin时不要重复初始化/覆盖。
 
@@ -623,3 +623,5 @@ Vite代理/system和/status到8089，生产环境需另配Web服务器反向代�
 分组结构及值变化会递增分组版本，配置项编辑会递增自身版本。旧页面遇到409须刷新；进行结构操作前先保存或放弃其他TAB修改。开发初始化数据仍使用增量迁移并保护已有值。
 
 图标库位于系统管理下，菜单code为icon_library，前端路径/system/icons，组件标识system/icon/index。超管可直接查看启用的菜单，普通角色需要分配该页面节点。图标资源为前端本地数据，不增加业务接口。
+
+后台审查补充：系统配置单组最多1000项，新增和移动配置项均检查目标容量，批量保存最多1000个变更项；前端只提交发生变化的项，避免大组中未改动字段触发旧的100项限制。第三方HTTP日志仅记录目标协议/主机、方法、响应状态、大小、耗时及错误类别，不记录URL路径/查询、请求头、请求体、响应体或可能含凭据的错误原文。

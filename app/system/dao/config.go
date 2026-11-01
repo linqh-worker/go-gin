@@ -189,6 +189,15 @@ func SaveConfigDefinition(ctx context.Context, id int64, item ConfigItem, actor 
 				return errorx.New(10001, "内置关键配置不能改key、分组、数据类型或取消保护")
 			}
 		}
+		if id == 0 || old.GroupCode != target.GroupCode {
+			count, err := q.Where(do.SystemConfig{RecordType: "item", GroupCode: target.GroupCode}).Count()
+			if err != nil {
+				return err
+			}
+			if count >= 1000 {
+				return errorx.New(10001, "单个分组最多1000个配置项，请新建分组")
+			}
+		}
 		if err := validate(item, item.ConfigValue); err != nil {
 			return err
 		}

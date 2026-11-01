@@ -56,8 +56,8 @@ func Save(ctx context.Context, group string, actor int, r request.SaveReq) error
 	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(group) {
 		return errorx.New(10001, "分组编码无效")
 	}
-	if len(r.Items) == 0 || len(r.Items) > 100 {
-		return errorx.New(10001, "每次保存1至100项配置")
+	if len(r.Items) == 0 || len(r.Items) > 1000 {
+		return errorx.New(10001, "每次保存1至1000项配置")
 	}
 	seen := map[string]bool{}
 	changes := make([]dao.ConfigChange, 0, len(r.Items))

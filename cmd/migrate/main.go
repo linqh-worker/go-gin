@@ -3,7 +3,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"fmt"
+	"os"
 
 	filex "go-gin/internal/file"
 	"go-gin/internal/migration"
@@ -29,10 +32,18 @@ type Config struct {
 
 func main() {
 	flag.Parse()
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+func run() error {
 	color.Enable()
 
 	var c Config
-	filex.MustLoad(*configFile, &c)
+	if err := filex.MustLoad(*configFile, &c); err != nil {
+		return errors.New("读取迁移配置失败，请检查配置文件")
+	}
 
 	db, err := gorm.Open(mysql.New(mysql.Config{
 		DSN:                      c.DB.DSN,
@@ -45,13 +56,13 @@ func main() {
 	})
 
 	if err != nil {
-		color.Printf(color.Red("Database connection failed: %v\n"), err)
-		return
+		return errors.New("数据库连接失败，请检查迁移配置与数据库状态")
 	}
 
 	migration.SetDB(db)
 
 	if err := migration.GetManager().Run(); err != nil {
-		return
+		return errors.New("迁移失败，请检查上方日志及迁移记录")
 	}
+	return nil
 }
