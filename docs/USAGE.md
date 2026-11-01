@@ -597,3 +597,5 @@ Vite代理/system和/status到8089，生产环境需另配Web服务器反向代�
 新增分组JSON示例：{"code":"payment","name":"支付设置"}。编辑分组提交name、version；删除分组/配置项提交当前version。新增配置项提交group_code、key、name、value、value_type、input_type、is_public、is_builtin、sort、remark；编辑另传当前version。类型与控件必须匹配（string→input/textarea、integer→number、boolean→switch、json→json）。所有value仍按字符串提交。
 
 分组结构及值变化会递增分组版本，配置项编辑会递增自身版本。旧页面遇到409须刷新；进行结构操作前先保存或放弃其他TAB修改。开发初始化数据仍使用增量迁移并保护已有值。
+
+图标库位于系统管理下，菜单code为icon_library，前端路径/system/icons，组件标识system/icon/index。超管可直接查看启用的菜单，普通角色需要分配该页面节点。图标资源为前端本地数据，不增加业务接口。
