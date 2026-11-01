@@ -16,4 +16,5 @@ func RegisterAccountRoutes(r *httpx.RouterGroup) {
 	r.POST("/admins", controller.Create(true))
 	r.PATCH("/admins/:id", controller.Update(true))
 	r.PUT("/admins/:id/status", controller.Status(true))
+	r.PUT("/admins/:id/password", controller.Password)
 }

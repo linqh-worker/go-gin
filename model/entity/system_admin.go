@@ -24,6 +24,7 @@ type SystemAdmin struct {
 	CreatedAt         *time.Time `gorm:"column:created_at" json:"created_at"`
 	DeletedAt         *time.Time `gorm:"column:deleted_at" json:"deleted_at"`
 	UpdatedAt         *time.Time `gorm:"column:updated_at" json:"updated_at"`
+	IsProtected       int        `gorm:"column:is_protected" json:"is_protected"`
 }
 
 func (e *SystemAdmin) TableName() string {

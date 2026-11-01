@@ -1,6 +1,7 @@
 package user
 
 type AuthUser struct {
+	IsProtected bool     `json:"is_protected"`
 	Roles       []string `json:"roles"`
 	MenuIDs     []int    `json:"menu_ids"`
 	ID          int      `json:"id"`

@@ -15,7 +15,7 @@ import (
 )
 
 func profile(u *dao.AuthUser) response.Profile {
-	return response.Profile{ID: u.ID, Username: u.Name, Nickname: u.Nickname, AvatarURL: u.AvatarURL, Phone: u.Phone, Email: u.Email, Age: u.Age, Gender: u.Gender, Status: u.Status, LoginCount: u.LoginCount, LastLoginAt: util.FormatTime(u.LastLoginAt), CreatedAt: util.FormatTime(u.CreatedAt), UpdatedAt: util.FormatTime(u.UpdatedAt)}
+	return response.Profile{ID: u.ID, Username: u.Name, Nickname: u.Nickname, AvatarURL: u.AvatarURL, Phone: u.Phone, Email: u.Email, Age: u.Age, Gender: u.Gender, Status: u.Status, IsProtected: u.IsProtected, LoginCount: u.LoginCount, LastLoginAt: util.FormatTime(u.LastLoginAt), CreatedAt: util.FormatTime(u.CreatedAt), UpdatedAt: util.FormatTime(u.UpdatedAt)}
 }
 func List(ctx context.Context, admin bool, r request.ListReq) (response.Page, error) {
 	if r.Page == 0 {
@@ -59,9 +59,9 @@ func Create(ctx context.Context, admin bool, r request.CreateReq) (response.Prof
 		return response.Profile{}, err
 	}
 	now := time.Now()
-	empty := ""
-	age := 0
-	u := dao.AuthUser{Name: r.Username, Nickname: r.Nickname, PasswordHash: string(hash), Status: 1, Phone: &empty, Email: &empty, Age: &age, PasswordChangedAt: &now, CreatedAt: &now, UpdatedAt: &now}
+	phone, email := strings.TrimSpace(r.Phone), strings.TrimSpace(r.Email)
+	age := r.Age
+	u := dao.AuthUser{Name: r.Username, Nickname: r.Nickname, PasswordHash: string(hash), Status: 1, Phone: &phone, Email: &email, Age: &age, AvatarURL: strings.TrimSpace(r.AvatarURL), Gender: r.Gender, PasswordChangedAt: &now, CreatedAt: &now, UpdatedAt: &now}
 	if err := dao.CreateAccount(ctx, admin, &u); err != nil {
 		return response.Profile{}, err
 	}
@@ -98,4 +98,16 @@ func Status(ctx context.Context, admin bool, id, actor int, status int) error {
 		return errorx.New(10001, "不能通过此接口修改自己的状态")
 	}
 	return dao.UpdateAccount(ctx, admin, id, map[string]any{"status": status}, true)
+}
+
+// Password 的演示账号保护在DAO事务中校验。
+func Password(ctx context.Context, id int, r request.PasswordReq) error {
+	if utf8.RuneCountInString(r.Password) < 8 || len(r.Password) > 72 || r.Password != r.PasswordConfirmation {
+		return errorx.New(10001, "密码至少8字符、不超过72字节，且两次输入须一致")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(r.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return dao.UpdateAdminPassword(ctx, id, string(hash))
 }

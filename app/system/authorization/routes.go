@@ -8,7 +8,7 @@ func IsPersonal(method, path string) bool {
 }
 func IsSuperOnly(method, path string) bool {
 	switch method + " " + path {
-	case "POST /system/admins", "PATCH /system/admins/:id", "PUT /system/admins/:id/status", "PUT /system/admins/:id/roles",
+	case "PUT /system/admins/:id/password", "POST /system/admins", "PATCH /system/admins/:id", "PUT /system/admins/:id/status", "PUT /system/admins/:id/roles",
 		"POST /system/roles", "PUT /system/roles/:id", "GET /system/roles/:id/menus", "PUT /system/roles/:id/menus",
 		"GET /system/menus", "POST /system/menus", "PUT /system/menus/:id", "DELETE /system/menus/:id":
 		return true

@@ -15,6 +15,7 @@ var ErrUsernameExists = errors.New("username already exists")
 // AuthUser 是用户端认证的数据对象，不作为 HTTP 响应返回。
 // 放在模块内，重新生成公共 entity 时不会覆盖认证代码。
 type AuthUser struct {
+	IsProtected       bool       `gorm:"column:is_protected"`
 	ID                int        `gorm:"column:id;primaryKey"`
 	Name              string     `gorm:"column:name"`
 	Nickname          string     `gorm:"column:nickname"`
@@ -37,7 +38,7 @@ type AuthUser struct {
 
 type AuthRepository struct{}
 
-const authColumns = "id, name, nickname, avatar_url, phone, email, gender, register_ip, last_login_at, last_login_ip, login_count, password_changed_at, password_hash, age, status, created_at, updated_at, deleted_at"
+const authColumns = "is_protected, id, name, nickname, avatar_url, phone, email, gender, register_ip, last_login_at, last_login_ip, login_count, password_changed_at, password_hash, age, status, created_at, updated_at, deleted_at"
 
 // RecordLogin 使用数据库原子自增，避免并发登录丢失计数。
 func (AuthRepository) RecordLogin(ctx context.Context, id int, ip string, at time.Time) error {

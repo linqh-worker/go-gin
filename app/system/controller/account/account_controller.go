@@ -74,3 +74,15 @@ func Status(admin bool) httpx.HandlerFunc {
 		return nil, auth.HTTPError(logic.Status(c.Request.Context(), admin, n, c.GetInt("user_id"), *r.Status))
 	}
 }
+
+func Password(c *httpx.Context) (any, error) {
+	n, err := id(c)
+	if err != nil {
+		return nil, err
+	}
+	var r request.PasswordReq
+	if err := c.ShouldBindJSON(&r); err != nil {
+		return nil, validation.Error(err, &r)
+	}
+	return nil, auth.HTTPError(logic.Password(c.Request.Context(), n, r))
+}

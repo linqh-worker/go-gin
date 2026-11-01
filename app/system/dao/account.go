@@ -32,12 +32,12 @@ func ListAccounts(ctx context.Context, admin bool, page, size int, keyword strin
 		return nil, 0, err
 	}
 	rows := []AuthUser{}
-	err = query.Fields(profileColumns).Order("id DESC").Page(page, size).All(&rows)
+	err = query.Fields(accountProfileColumns(admin)).Order("id DESC").Page(page, size).All(&rows)
 	return rows, total, err
 }
 func Account(ctx context.Context, admin bool, id int) (*AuthUser, error) {
 	var row AuthUser
-	err := accountModel(ctx, admin).Fields(profileColumns).WherePri(id).WhereNull("deleted_at").One(&row)
+	err := accountModel(ctx, admin).Fields(accountProfileColumns(admin)).WherePri(id).WhereNull("deleted_at").One(&row)
 	if err != nil {
 		return nil, err
 	}
@@ -59,12 +59,18 @@ func CreateAccount(ctx context.Context, admin bool, user *AuthUser) error {
 }
 func UpdateAccount(ctx context.Context, admin bool, id int, fields map[string]any, statusChange bool) error {
 	return db.Transaction(ctx, func(tx *db.TX) error {
-		var row struct{ ID int }
+		var row struct {
+			ID          int
+			IsProtected bool
+		}
 		if err := accountModel(ctx, admin).WithTX(tx).WherePri(id).WhereNull("deleted_at").LockUpdate().One(&row); err != nil {
 			return err
 		}
 		if row.ID == 0 {
 			return errorx.New(10001, "账号不存在")
+		}
+		if admin && row.IsProtected {
+			return errorx.New(403, "演示管理员受保护，不允许修改")
 		}
 		if admin && statusChange {
 			super, err := hasSuperRole(ctx, tx, id)
@@ -91,6 +97,33 @@ func UpdateAccount(ctx context.Context, admin bool, id int, fields map[string]an
 		}
 		data["updated_at"] = time.Now()
 		_, err := accountModel(ctx, admin).WithTX(tx).WherePri(id).Data(data).Update()
+		return err
+	})
+}
+
+func accountProfileColumns(admin bool) string {
+	if admin {
+		return profileColumns + ",is_protected"
+	}
+	return profileColumns
+}
+func UpdateAdminPassword(ctx context.Context, id int, hash string) error {
+	return db.Transaction(ctx, func(tx *db.TX) error {
+		var row struct {
+			ID          int
+			IsProtected bool
+		}
+		if err := modeldao.SystemAdmin.Ctx(ctx).WithTX(tx).WherePri(id).WhereNull("deleted_at").LockUpdate().One(&row); err != nil {
+			return err
+		}
+		if row.ID == 0 {
+			return errorx.New(10001, "管理员不存在")
+		}
+		if row.IsProtected {
+			return errorx.New(403, "演示管理员受保护，不允许修改密码")
+		}
+		now := time.Now()
+		_, err := modeldao.SystemAdmin.Ctx(ctx).WithTX(tx).WherePri(id).Data(map[string]any{"password_hash": hash, "password_changed_at": now, "updated_at": now}).Update()
 		return err
 	})
 }

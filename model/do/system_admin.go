@@ -21,4 +21,5 @@ type SystemAdmin struct {
 	CreatedAt         any // 创建时间
 	DeletedAt         any // 软删除时间，NULL表示未删除
 	UpdatedAt         any // 更新时间
+	IsProtected       any // 演示账号保护：1禁止通过HTTP修改资料、密码、状态及角色
 }

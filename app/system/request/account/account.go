@@ -7,9 +7,14 @@ type ListReq struct {
 	Status   *int   `form:"status" binding:"omitempty,oneof=0 1"`
 }
 type CreateReq struct {
-	Username string `json:"username" binding:"required,min=3,max=32"`
-	Nickname string `json:"nickname" binding:"max=50"`
-	Password string `json:"password" binding:"required,min=8,max=72"`
+	AvatarURL string `json:"avatar_url" binding:"max=255"`
+	Phone     string `json:"phone" binding:"max=32"`
+	Email     string `json:"email" binding:"omitempty,email,max=254"`
+	Age       int    `json:"age" binding:"gte=0,lte=150"`
+	Gender    uint8  `json:"gender" binding:"oneof=0 1 2"`
+	Username  string `json:"username" binding:"required,min=3,max=32"`
+	Nickname  string `json:"nickname" binding:"max=50"`
+	Password  string `json:"password" binding:"required,min=8,max=72"`
 }
 type UpdateReq struct {
 	Nickname  *string `json:"nickname" binding:"omitempty,max=50"`
@@ -21,4 +26,9 @@ type UpdateReq struct {
 }
 type StatusReq struct {
 	Status *int `json:"status" binding:"required,oneof=0 1"`
+}
+
+type PasswordReq struct {
+	Password             string `json:"password" binding:"required,min=8,max=72"`
+	PasswordConfirmation string `json:"password_confirmation" binding:"required,eqfield=Password"`
 }

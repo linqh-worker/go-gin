@@ -1,6 +1,7 @@
 package account
 
 type Profile struct {
+	IsProtected bool    `json:"is_protected"`
 	ID          int     `json:"id"`
 	Username    string  `json:"username"`
 	Nickname    string  `json:"nickname"`

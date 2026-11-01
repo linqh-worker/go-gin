@@ -54,6 +54,7 @@ func validateCredentials(username, password string) (string, error) {
 func authUser(user *dao.AuthUser) userResponse.AuthUser {
 	return userResponse.AuthUser{
 		ID:          user.ID,
+		IsProtected: user.IsProtected,
 		Username:    user.Name,
 		Nickname:    user.Nickname,
 		AvatarURL:   user.AvatarURL,
@@ -95,12 +96,12 @@ func (s *AuthService) Login(ctx context.Context, req authRequest.LoginReq) (*aut
 	if user.Status != 1 {
 		return nil, ErrDisabled
 	}
-	return s.createLogin(ctx, user.ID, req.ClientIP)
+	return s.createLogin(ctx, user.ID, user.PasswordHash, req.ClientIP)
 }
 
 // createLogin 供注册和登录共用，记录登录信息后才返回 Token。
-func (s *AuthService) createLogin(ctx context.Context, userID int, ip string) (*authResponse.LoginResp, error) {
-	token, err := s.Store.IssueToken(ctx, userID)
+func (s *AuthService) createLogin(ctx context.Context, userID int, passwordHash, ip string) (*authResponse.LoginResp, error) {
+	token, err := s.Store.IssueToken(ctx, userID, passwordHash)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +113,7 @@ func (s *AuthService) createLogin(ctx context.Context, userID int, ip string) (*
 		return nil, err
 	}
 	user, err := s.Users.FindByID(ctx, userID)
-	if err != nil || user == nil || user.Status != 1 || user.DeletedAt != nil {
+	if err != nil || user == nil || user.Status != 1 || user.DeletedAt != nil || user.PasswordHash != passwordHash {
 		_ = s.Store.Revoke(ctx, token)
 		if err != nil {
 			return nil, err
@@ -130,7 +131,7 @@ func (s *AuthService) createLogin(ctx context.Context, userID int, ip string) (*
 }
 
 func (s *AuthService) Current(ctx context.Context, token string) (*userResponse.AuthUser, error) {
-	id, err := s.Store.UserID(ctx, token)
+	id, version, err := s.Store.UserID(ctx, token)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +139,7 @@ func (s *AuthService) Current(ctx context.Context, token string) (*userResponse.
 	if err != nil {
 		return nil, err
 	}
-	if user == nil || user.Status != 1 || user.DeletedAt != nil {
+	if user == nil || user.Status != 1 || user.DeletedAt != nil || digest(user.PasswordHash) != version {
 		return nil, ErrUnauthorized
 	}
 	resp := authUser(user)

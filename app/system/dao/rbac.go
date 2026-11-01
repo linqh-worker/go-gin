@@ -90,12 +90,18 @@ func hasSuperRole(ctx context.Context, tx *db.TX, adminID int) (bool, error) {
 }
 func SetAdminRoles(ctx context.Context, adminID int, ids []int) error {
 	return db.Transaction(ctx, func(tx *db.TX) error {
-		var admin struct{ ID int }
+		var admin struct {
+			ID          int
+			IsProtected bool
+		}
 		if err := modeldao.SystemAdmin.Ctx(ctx).WithTX(tx).WherePri(adminID).WhereNull("deleted_at").LockUpdate().One(&admin); err != nil {
 			return err
 		}
 		if admin.ID == 0 {
 			return errorx.New(10001, "管理员不存在")
+		}
+		if admin.IsProtected {
+			return errorx.New(403, "演示管理员受保护，不允许修改角色")
 		}
 		super, err := hasSuperRole(ctx, tx, adminID)
 		if err != nil {

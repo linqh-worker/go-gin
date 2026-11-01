@@ -31,6 +31,7 @@ type SystemAdminColumns struct {
 	CreatedAt         string
 	DeletedAt         string
 	UpdatedAt         string
+	IsProtected       string
 }
 
 var systemAdminColumns = SystemAdminColumns{
@@ -52,6 +53,7 @@ var systemAdminColumns = SystemAdminColumns{
 	CreatedAt:         "created_at",
 	DeletedAt:         "deleted_at",
 	UpdatedAt:         "updated_at",
+	IsProtected:       "is_protected",
 }
 
 func NewSystemAdminDao() *SystemAdminDao {

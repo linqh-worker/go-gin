@@ -9,6 +9,7 @@ import (
 	"errors"
 	authResponse "go-gin/app/system/response/auth"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,7 +92,7 @@ func (s AuthStore) VerifyCaptcha(ctx context.Context, purpose, id, code string) 
 	return nil
 }
 
-func (s AuthStore) IssueToken(ctx context.Context, userID int) (string, error) {
+func (s AuthStore) IssueToken(ctx context.Context, userID int, passwordHash string) (string, error) {
 	if err := s.ready(); err != nil {
 		return "", err
 	}
@@ -101,29 +102,33 @@ func (s AuthStore) IssueToken(ctx context.Context, userID int) (string, error) {
 	}
 	token := hex.EncodeToString(buf)
 	// 单条 SET 同时写入用户ID与过期时间，不产生永久有效的半成品登录态。
-	if err := s.Redis.Set(ctx, "system:auth:token:"+digest(token), strconv.Itoa(userID), tokenTTL).Err(); err != nil {
+	if err := s.Redis.Set(ctx, "system:auth:token:"+digest(token), strconv.Itoa(userID)+":"+digest(passwordHash), tokenTTL).Err(); err != nil {
 		return "", err
 	}
 	return token, nil
 }
 
-func (s AuthStore) UserID(ctx context.Context, token string) (int, error) {
+func (s AuthStore) UserID(ctx context.Context, token string) (int, string, error) {
 	if err := s.ready(); err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if len(token) != 64 {
-		return 0, ErrUnauthorized
+		return 0, "", ErrUnauthorized
 	}
 	// 使用 EXISTS 后 GET 会产生竞态；Lua 直接返回值或空串。
 	value, err := s.Redis.Eval(ctx, `return redis.call('GET', KEYS[1]) or ''`, []string{"system:auth:token:" + digest(token)}).Text()
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	id, err := strconv.Atoi(value)
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 {
+		return 0, "", ErrUnauthorized
+	}
+	id, err := strconv.Atoi(parts[0])
 	if err != nil || id <= 0 {
-		return 0, ErrUnauthorized
+		return 0, "", ErrUnauthorized
 	}
-	return id, nil
+	return id, parts[1], nil
 }
 
 func (s AuthStore) Revoke(ctx context.Context, token string) error {
