@@ -15,7 +15,6 @@ import (
 	"go-gin/internal/queue"
 	_ "go-gin/internal/util"
 	"go-gin/router"
-	"go-gin/util"
 	"net"
 	"os"
 	"strconv"
@@ -109,9 +108,8 @@ func mountMonitor(engine *httpx.Engine) {
 
 	r := engine.Engine.Group("/monitor")
 	r.Use(func(ctx *gin.Context) {
-		clientIp := ctx.ClientIP()
-		// 如果客户端ip不在白名单内，直接返回403
-		if !util.InArray(clientIp, config.GetMonitorConf().WhiteIpList) {
+		// 监控只支持白名单直连或SSH隧道，不信任转发头。
+		if !httpx.MonitorAllowed(ctx.Request, config.GetMonitorConf().WhiteIpList) {
 			httpx.Error(httpx.NewContext(ctx), errorx.ErrForbidden)
 			ctx.Abort()
 			return
