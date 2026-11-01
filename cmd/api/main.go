@@ -51,6 +51,7 @@ func main() {
 	config.InitGlobalVars()
 	config.InitEnvironment()
 
+	logx.SetDefaultModule(*module)
 	logx.InitConfig(config.GetLogConf())
 	logx.Init()
 

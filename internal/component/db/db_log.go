@@ -54,14 +54,23 @@ func (l *DBLog) LogMode(level logger.LogLevel) logger.Interface {
 
 // Info print info
 func (l *DBLog) Info(ctx context.Context, msg string, data ...any) {
+	if l.LogLevel >= logger.Info {
+		logx.WithSQLContext(ctx).Infof("sql", msg, data...)
+	}
 }
 
 // Warn print warn messages
 func (l *DBLog) Warn(ctx context.Context, msg string, data ...any) {
+	if l.LogLevel >= logger.Warn {
+		logx.WithSQLContext(ctx).Warnf("sql", msg, data...)
+	}
 }
 
 // Error print error messages
 func (l *DBLog) Error(ctx context.Context, msg string, data ...any) {
+	if l.LogLevel >= logger.Error {
+		logx.WithSQLContext(ctx).Errorf("sql", msg, data...)
+	}
 }
 
 // Trace print sql message
@@ -75,27 +84,27 @@ func (l *DBLog) Trace(ctx context.Context, begin time.Time, fc func() (string, i
 	slowThreshold := 10 * time.Second
 	switch {
 	case err != nil && l.LogLevel >= logger.Error && !errors.Is(err, logger.ErrRecordNotFound):
-		sql, rows := fc()
+		sql, rows := sqlTrace(ctx, fc)
 		if rows == -1 {
-			logx.WithContext(ctx).Errorf("sql", traceErrStr, util.FileWithLineNum(), err, float64(elapsed.Nanoseconds())/1e6, "-", sql)
+			logx.WithSQLContext(ctx).Errorf("sql", traceErrStr, util.FileWithLineNum(), err, float64(elapsed.Nanoseconds())/1e6, "-", sql)
 		} else {
-			logx.WithContext(ctx).Errorf("sql", traceErrStr, util.FileWithLineNum(), err, float64(elapsed.Nanoseconds())/1e6, rows, sql)
+			logx.WithSQLContext(ctx).Errorf("sql", traceErrStr, util.FileWithLineNum(), err, float64(elapsed.Nanoseconds())/1e6, rows, sql)
 		}
 	case elapsed > slowThreshold && l.LogLevel >= logger.Warn:
-		sql, rows := fc()
+		sql, rows := sqlTrace(ctx, fc)
 		slowLog := fmt.Sprintf("SLOW SQL >= %v", slowThreshold)
 		if rows == -1 {
-			logx.WithContext(ctx).Warnf("sql", traceWarnStr, util.FileWithLineNum(), slowLog, float64(elapsed.Nanoseconds())/1e6, '-', sql)
+			logx.WithSQLContext(ctx).Warnf("sql", traceWarnStr, util.FileWithLineNum(), slowLog, float64(elapsed.Nanoseconds())/1e6, "-", sql)
 		} else {
-			logx.WithContext(ctx).Warnf("sql", traceWarnStr, util.FileWithLineNum(), slowLog, float64(elapsed.Nanoseconds())/1e6, rows, sql)
+			logx.WithSQLContext(ctx).Warnf("sql", traceWarnStr, util.FileWithLineNum(), slowLog, float64(elapsed.Nanoseconds())/1e6, rows, sql)
 
 		}
 	case l.LogLevel == logger.Info:
-		sql, rows := fc()
+		sql, rows := sqlTrace(ctx, fc)
 		if rows == -1 {
-			logx.WithContext(ctx).Debugf("sql", traceStr, util.FileWithLineNum(), float64(elapsed.Nanoseconds())/1e6, "-", sql)
+			logx.WithSQLContext(ctx).Infof("sql", traceStr, util.FileWithLineNum(), float64(elapsed.Nanoseconds())/1e6, "-", sql)
 		} else {
-			logx.WithContext(ctx).Debugf("sql", traceStr, util.FileWithLineNum(), float64(elapsed.Nanoseconds())/1e6, rows, sql)
+			logx.WithSQLContext(ctx).Infof("sql", traceStr, util.FileWithLineNum(), float64(elapsed.Nanoseconds())/1e6, rows, sql)
 		}
 	}
 }

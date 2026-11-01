@@ -1,14 +1,13 @@
 package logx
 
 import (
+	"github.com/labstack/gommon/color"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"go-gin/internal/environment"
 	"io"
 	"strings"
 	"time"
-
-	"github.com/labstack/gommon/color"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -27,12 +26,11 @@ type Config struct {
 var conf Config
 
 func InitConfig(c Config) {
-	if !strings.HasSuffix(c.Path, "/") {
-		c.Path = c.Path + "/"
+	if strings.TrimSpace(c.Path) == "" {
+		c.Path = "storage/logs"
 	}
 	conf = c
 }
-
 func Init() {
 	if environment.IsDebugMode() {
 		color.Enable()
@@ -42,39 +40,20 @@ func Init() {
 		level = zerolog.InfoLevel
 	}
 	zerolog.TimeFieldFormat = time.DateTime
-	zerolog.LevelFieldMarshalFunc = func(l zerolog.Level) string {
-		return strings.ToUpper(l.String())
-	}
-
-	log.Logger = initDefaultInstance(level)
-	AccessLogger = initLoggerInstance("access")
-	RestyLogger = initLoggerInstance("httpc")
-	CronLogger = initLoggerInstance("access_cron")
-	QueueLogger = initLoggerInstance("access_queue")
+	zerolog.LevelFieldMarshalFunc = func(l zerolog.Level) string { return strings.ToUpper(l.String()) }
+	log.Logger = newLogger("app", level)
+	AccessLogger = newLogger("access", zerolog.InfoLevel)
+	// SQL是否记录、错误/慢查询/普通查询由db.log-level独立控制。
+	DBLogger = newLogger("sql", zerolog.DebugLevel)
+	RestyLogger = newLogger("httpc", zerolog.InfoLevel)
+	CronLogger = newLogger("cron", zerolog.InfoLevel)
+	QueueLogger = newLogger("queue", zerolog.InfoLevel)
 }
-
-func initDefaultInstance(l zerolog.Level) zerolog.Logger {
-	fileWriter := zerolog.SyncWriter(&FileLevelWriter{
-		Dirname:     conf.Path,
-		FilePattern: time.DateOnly,
-	})
-
-	writers := []io.Writer{fileWriter}
+func newLogger(category string, level zerolog.Level) zerolog.Logger {
+	writer := zerolog.SyncWriter(&moduleWriter{Root: conf.Path, Category: category})
+	writers := []io.Writer{writer}
 	if environment.IsDebugMode() {
 		writers = append(writers, &ConsoleLevelWriter{})
 	}
-	multi := zerolog.MultiLevelWriter(writers...)
-	return zerolog.New(multi).Level(l).With().Timestamp().Logger().Hook(TracingHook{})
-}
-
-func initLoggerInstance(path string) zerolog.Logger {
-	queueFileWriter := zerolog.SyncWriter(&FileLevelWriter{
-		Dirname:     conf.Path + strings.Trim(path, "/") + "/",
-		FilePattern: time.DateOnly,
-	})
-	writers := []io.Writer{queueFileWriter}
-	if environment.IsDebugMode() {
-		writers = append(writers, &ConsoleLevelWriter{})
-	}
-	return zerolog.New(zerolog.MultiLevelWriter(writers...)).Level(zerolog.InfoLevel).With().Timestamp().Logger().Hook(TracingHook{})
+	return zerolog.New(zerolog.MultiLevelWriter(writers...)).Level(level).With().Timestamp().Logger().Hook(TracingHook{})
 }

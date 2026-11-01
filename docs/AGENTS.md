@@ -75,7 +75,7 @@ logic/DAO接收 `context.Context`，不依赖Gin、controller或router。control
 
 - `.env` 是YAML，示例只放占位值。通过-f指定完整文件，改配置重启相关进程；不假定系统环境变量能覆盖所有配置。
 - 当前不要求请求体密码加密，部署使用HTTPS。历史密钥工具不参与HTTP认证。
-- 日志用 `logx.WithContext(ctx)` 关联追踪；不记录密码、完整Token、验证码答案、密钥、整份请求头或配置。
+- 日志用 `logx.WithContext(ctx)` 关联追踪及api/system模块；controller向DAO传Request.Context，禁止请求途中切换全局日志模块。日志按端及app/access/sql/httpc分类，SQL使用WithSQLContext并保留参数占位符。不记录密码、完整Token、验证码答案、密钥、整份请求头或配置。
 - rest按外部服务封装客户端，明确超时、错误映射和重试条件，非幂等请求不无条件重试。
 - 任务在task定义并由task/init.go注册；事件在event/init.go注册；定时任务在cron/init.go注册。
 - 异步任务设计重复执行安全；投递成功不代表业务执行完成。当前cron保持单调度实例。

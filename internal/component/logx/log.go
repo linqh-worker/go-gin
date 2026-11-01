@@ -9,13 +9,14 @@ import (
 )
 
 type defaultLog struct {
-	ctx context.Context
+	ctx    context.Context
+	logger *zerolog.Logger
 }
 
 var _ Logger = (*defaultLog)(nil)
 
 func WithContext(ctx context.Context) Logger {
-	return &defaultLog{ctx}
+	return &defaultLog{ctx: ctx, logger: &log.Logger}
 }
 
 func (l *defaultLog) Debug(keyword string, data any) {
@@ -51,5 +52,8 @@ func (l *defaultLog) Errorf(keyword string, format string, data ...any) {
 }
 
 func (l *defaultLog) print(level zerolog.Level, keyword string, data any) {
-	log.WithLevel(level).Ctx(l.ctx).Str("keyword", keyword).Any("data", data).Send()
+	l.logger.WithLevel(level).Ctx(l.ctx).Str("keyword", keyword).Any("data", data).Send()
 }
+
+// WithSQLContext 将数据库日志写入当前模块的sql目录。
+func WithSQLContext(ctx context.Context) Logger { return &defaultLog{ctx: ctx, logger: &DBLogger} }

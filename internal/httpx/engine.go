@@ -27,7 +27,7 @@ func New() *Engine {
 // Default 返回一个带有默认中间件的 Engine 实例
 func Default() *Engine {
 	engine := New()
-	engine.Use(recoverLog(), TraceId(), RequestLog(), dbCheck())
+	engine.Use(ModuleLog(), TraceId(), RequestLog(), recoverLog(), dbCheck())
 	return engine
 }
 
@@ -48,7 +48,7 @@ func (engine *Engine) Group(relativePath string, handlers ...HandlerFunc) *Route
 
 // Use 添加全局中间件
 func (engine *Engine) Use(middleware ...gin.HandlerFunc) IRoutes {
-	engine.RouterGroup.Use(middleware...)
+	engine.Engine.Use(middleware...)
 	return engine
 }
 

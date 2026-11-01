@@ -52,6 +52,10 @@ func Connect() (err error) {
 		return err
 	}
 
+	if err = registerSQLLogContext(instance); err != nil {
+		instance = nil
+		return err
+	}
 	sqlDB, err := instance.DB()
 	if err != nil {
 		instance = nil

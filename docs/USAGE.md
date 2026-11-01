@@ -447,7 +447,31 @@ API和System均排除deleted_at不为空的账号。停用只阻断认证，不�
 
 ## 8. 日志与部署
 
-日志根目录来自log.path，按access、httpc、access_cron、access_queue等用途分类并按日期保存。模块中间件标记api/system，当前未自动按端分日志文件；按端定位可结合路径、模块和requestId。数据库日志使用参数占位符，业务不输出密码、Token或验证码。
+日志根目录来自log.path。请求日志、业务/异常日志、SQL及第三方HTTP调用日志先按api/system分端，再按用途分类，日志带module和requestId：
+
+```text
+storage/logs/
+├── api/
+│   ├── app/        业务日志、Redis异常、panic
+│   ├── access/     请求方法、路径、状态码、耗时
+│   ├── sql/        普通SQL、慢SQL和数据库错误
+│   └── httpc/      本端发起的第三方HTTP调用
+├── system/
+│   ├── app/
+│   ├── access/
+│   ├── sql/
+│   └── httpc/
+└── common/         合并启动时的公共路由、初始化及无归属任务
+```
+
+各目录按日期保存为YYYY-MM-DD.log；WARN/ERROR/FATAL等保存为YYYY-MM-DD-error.log。cron和queue仍按用途使用cron/queue目录，并在携带端上下文时归入对应端。
+
+- HTTP入口先从路径的完整首段确定模块，再进入鉴权和数据库检查。模块标记写入Request.Context，controller继续传ctx.Request.Context()，DAO和GORM即可分流，不需要拆数据库连接池。
+- 拒绝请求、404/405及panic也经过分流；访问日志不记录查询参数。业务日志统一使用logx.WithContext(ctx)，不要换成context.Background()丢失端标记。
+- --module=all时，没有模块信息的日志写common；单独启动--module=api或system时，初始化、公共路由及未指定模块的日志归本端。手动创建任务上下文可用logx.WithModule(ctx,"api")或"system"，不自动向异步队列传播业务模块。
+- db.log-level独立控制SQL：silent不记录；error记录数据库错误；warn再记录慢查询（当前阈值10秒）；info/debug记录普通SQL。普通SQL不会再因log.level不是debug而消失。SQL文件与app/access分开，保留SQL模板占位符；Raw().Scan()同样不插入绑定值。
+- 设置log.level控制业务日志级别。日志中不输出密码、完整Token、验证码和密钥；SQL应使用绑定参数，避免把敏感值直接拼成SQL字面量。
+- 修改后重启相关进程生效，现有历史日志保留，不自动重写或迁移。
 
 Windows构建：
 

@@ -1,41 +1,21 @@
 package httpx
 
 import (
-	"go-gin/internal/component/logx"
-	"net/url"
-	"time"
-
 	"github.com/gin-gonic/gin"
+	"go-gin/internal/component/logx"
+	"time"
 )
 
 func RequestLog() gin.HandlerFunc {
-
 	return func(c *gin.Context) {
-		// Start timer
 		start := time.Now()
 		path := c.Request.URL.Path
-		rawQuery := c.Request.URL.RawQuery
-		raw, _ := url.QueryUnescape(rawQuery)
-		// Process request
 		c.Next()
-
-		if raw != "" {
-			path = path + "?" + raw
-		}
-		timestamp := time.Now()
-		cost := timestamp.Sub(start)
+		cost := time.Since(start)
 		if cost > time.Minute {
 			cost = cost.Truncate(time.Second)
 		}
-
-		logx.AccessLogger.Info().Ctx(c).
-			Str("path", path).
-			Str("method", c.Request.Method).
-			Str("ip", c.ClientIP()).
-			Str("cost", cost.String()).
-			Int("status", c.Writer.Status()).
-			Str("proto", c.Request.Proto).
-			Str("user_agent", c.Request.UserAgent()).
-			Send()
+		// 只记录路径，不记录可能包含密码、验证码或Token的查询参数。
+		logx.AccessLogger.Info().Ctx(c.Request.Context()).Str("path", path).Str("method", c.Request.Method).Str("ip", c.ClientIP()).Str("cost", cost.String()).Int("status", c.Writer.Status()).Str("proto", c.Request.Proto).Str("user_agent", c.Request.UserAgent()).Send()
 	}
 }
