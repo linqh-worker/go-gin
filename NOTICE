@@ -1,0 +1,26 @@
+第三方来源与版权说明
+
+Gin Web Framework
+上游仓库：https://github.com/gin-gonic/gin
+当前依赖版本：v1.9.1（以 go.mod 为准）
+版本来源：https://github.com/gin-gonic/gin/tree/v1.9.1
+原始许可证：https://github.com/gin-gonic/gin/blob/v1.9.1/LICENSE
+本地许可证：licenses/gin/LICENSE
+版权所有：Copyright (c) 2014 Manuel Martínez-Almeida
+许可：MIT
+
+本项目依赖 Gin，internal/httpx/context.go 和
+internal/httpx/validators/default_validator.go 保留了 Gin 原始版权声明。
+本地代码已为当前框架的上下文封装、校验与错误处理作适配修改；
+原始版权声明保留，Gin 许可证按原文收录。
+
+本说明记录已核实的 Gin 来源，不是本项目所有代码的统一许可声明，
+也不能代替其他上游框架和依赖各自的许可证及署名。
+
+应用框架二次开发说明
+本项目在已有应用框架基础上二次开发。后续调整包含多模块组织、
+认证与账号管理、角色菜单授权、系统配置管理、迁移和开发文档；
+具体修改以本仓库Git提交记录为准，已有源码版权声明保留。
+
+上游应用框架的许可状态尚未核实明确；本说明不授予上游代码MIT
+或其他许可，Gin的许可证不能替代上游应用框架的授权。
