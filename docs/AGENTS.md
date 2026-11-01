@@ -96,3 +96,9 @@ logic/DAO接收 `context.Context`，不依赖Gin、controller或router。control
 `config/keys/<key_id>/` 只保存公钥和加密私钥归档；口令独立备份。生成文件正常提交，不用git add -f。
 
 提交前检查git status、git diff --check及暂存内容；说明描述具体改动，如 `feat(user): 增加用户资料维护`。交付写清行为、验证、迁移及部署顺序和未解决事项。未经用户要求不自动提交或推送Git。
+
+前端可使用既有system_menu.code作为按钮显隐标识，不增加permission_code字段或独立权限表。按钮使用公共hasPermission和v-if；权限只来自直接关联的启用节点，展示补齐的祖先不产生额外授权，后端继续按请求方法和接口模板鉴权。变更现有菜单code需同步前端引用，并用增量迁移兼容已有库。
+
+演示管理员保护以system_admin.is_protected为准，HTTP不得修改该标记；资料、密码、状态和角色写入均须在锁定账号后校验。管理员改密仅超管可用，校验确认密码、存bcrypt并使已有后台Token失效。
+
+系统动态配置保存在system_config；连接凭据及私钥不进入配置管理。公开读取只允许is_public=1，后台写入只接受key/value/version，按组事务校验并记录操作者，不允许通过保存值接口修改配置元信息或公开范围。配置定义由独立的超管接口维护，不能通过值保存接口修改。内置项不可删除、改key、移动分组、改数据类型或取消保护。分组采用同表record_type=group记录，公开查询必须同时约束record_type=item与is_public=1。配置写入先按ID锁分组行再锁配置项，结构变动同步版本。添加默认配置用增量迁移且不覆盖已设置值。

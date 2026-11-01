@@ -155,7 +155,7 @@ grant-super不修改密码。项目没有固定管理员密码、没有公开后
 go run ./cmd/migrate -f ./.env
 ```
 
-当前migration目录包含六份Create与一份SeedSystem迁移：空库得到六张业务表、migrations记录表、3个角色及27个菜单/接口节点。建表已有则跳过；同名角色不重新授权，菜单按编码或相同方法路径复用，不覆盖既有自定义配置。旧迁移执行记录保留。
+当前migration目录包含六份Create、一份SeedSystem及后续增量迁移：空库得到六张业务表、migrations记录表、3个角色及27个菜单/接口节点。建表已有则跳过；同名角色不重新授权，菜单按编码或相同方法路径复用，不覆盖既有自定义配置。旧迁移执行记录保留。
 
 迁移按结构体名称末尾14位时间戳排序；已登记的不再执行。部分失败只打印后返回，退出码可能为0，必须检查日志及记录。当前无rollback、status、fresh、reset、step和并发迁移锁，也不自动从数据库导出迁移。
 
@@ -536,3 +536,64 @@ git commit -m "docs: 统一项目说明、开发流程、约定和使用文档"
 覆盖注册自动登录、验证码图片/消费/重放/端隔离、密码确认/错误密码/重复账号、bcrypt及主键回填、默认值/时间/登录计数、Token隔离/退出、用户与管理员管理、资料白名单/零值、停用认证拒绝、角色菜单关联、动态路径、未授权方法、超管边界、可见祖先、失败授权保留原状态、角色/祖先停用、清空授权/解绑、菜单树新增/删除/环检查、未配置默认拒绝和限流隔离。
 
 临时环境已删除，原开发库六张业务表内容指纹与验证前一致；临时源文件已移除，不增加永久测试文件，也没有可直接重跑这些断言的现成命令。记录不涵盖浏览器前端、TLS部署、压力/高并发、MySQL或Redis故障恢复；后续代码变化按需重新验证。
+
+### 本地管理前端联调
+
+独立前端项目go-gin-web已对接后台登录/验证码、动态菜单、用户与管理员管理、角色及菜单授权。先在本后端目录运行 `go run ./cmd/api -f ./.env --module=system --port=127.0.0.1:8089`，再在前端目录运行 `pnpm dev`，访问 http://127.0.0.1:8848/ 。前端沿用Pure Admin的pnpm锁文件；要求Node >=22.22.1、pnpm >=11。
+
+Vite代理/system和/status到8089，生产环境需另配Web服务器反向代理。已有账号密码未修改；本机新增的演示超管及只读账号凭据仅保存在忽略目录.run/web-demo-accounts.json，不作为默认账号发布。通过前端代理的45项HTTP断言已通过，临时联调记录已核对标识后清理；浏览器自动化受限，未宣称逐项点击验证完成。
+
+旧菜单通用名称修正迁移为 `RenameInitialMenuActions20261101160000`，将endpoint_3/4/7/12/18/23/24/25对应的“系统初始规则”分别改为查看管理员详情、查看管理员角色、查看菜单树、查看用户详情、新增菜单、编辑菜单、编辑角色、分配角色菜单。仅匹配原通用名称及指定方法/接口模板，不覆盖已自定义的名称，不改变ID或角色关联；其他环境运行原迁移命令即可同步。
+
+旧endpoint_*菜单标识由 `RenameLegacyMenuCodes20261101160100` 增量迁移改为：admin_detail、admin_roles_read、menu_read、user_detail、menu_create、menu_update、role_update、role_menu_assign。code是唯一节点标识，供初始化定位与维护；接口鉴权匹配method/api_path，角色关联使用菜单ID。迁移保留ID、名称、接口配置和授权关联，重名时事务失败回滚。
+
+前端按钮统一用 `hasPermission('role_menu_assign')` 判断已有system_menu.code；传入数组时全部具备才显示。权限从当前管理员直接关联的启用菜单提取，导航补齐祖先不视为直接授权；保留超管操作仍只向超管显示。旧数据按钮code由 `NormalizeMenuButtonCodes20261101160200` 增量迁移与新库统一，保留菜单ID及授权关系。前端code检查只控制显示，后端仍按method/api_path校验。
+
+### 管理员改密、演示保护与资料
+
+- 超管使用 `PUT /system/admins/:id/password`，JSON为 `password` 和 `password_confirmation`，至少8字符、不超过72字节且须一致。菜单按钮标识为 `admin_password`；普通管理员即使关联该菜单也不能改密。
+- 改密后该账号已有Token失效。此次升级将后台Token绑定密码版本，旧格式后台Token也需重新登录，用户端Token不受影响。
+- `system_admin.is_protected=1` 标识演示保护账号；HTTP禁止修改其资料、密码、状态与角色。标记不接受HTTP赋值，只由服务器侧维护；普通超管账号默认0。
+- 新增用户和管理员支持昵称、头像地址、手机号、邮箱、年龄、性别；编辑使用PATCH白名单更新，同样支持清空资料及年龄/性别设为0。密码须走专用接口。
+- 先执行增量迁移，再部署后端与前端。迁移补齐空白的默认菜单图标并添加改密节点，保留已有自定义图标及角色授权。菜单图标推荐 `ri:user-3-line` 格式，兼容旧的 `ep/user` 写法；常用图标已本地打包。
+
+### 系统配置（单表、分组TAB）
+
+系统管理 → 系统配置，路由为 `/system/settings`。“网站设置”TAB统一维护网站名称、首页标题、关键字、网站描述。切换TAB保留当前编辑，分别保存；离开页面有未保存提醒。
+
+- 表：`system_config`；`config_key` 全局唯一，`group_code` 决定TAB。当前分组为website（网站设置），未来业务分组共用此表。
+- `GET /system/configs`：查询分组及配置，需菜单节点 `config_read`。
+- `PUT /system/configs/:group`：保存当前组，需 `config_update`。请求只接受items中的key、value、version，不能通过此接口修改公开标记、键名、类型和分组。
+- 页面菜单标识 `config_settings`；超管可访问已启用的节点，其他角色须勾选页面及查询/保存节点，不自动给已有角色授予新权限。
+- 按组事务保存；版本不匹配返回code=409，刷新后重新编辑。成功后记录updated_by、更新时间及版本；不变的值不递增版本。
+
+示例：
+
+```json
+{"items":[{"key":"website.name","value":"我的网站","version":1},{"key":"website.home_title","value":"管理工作台","version":1}]}
+```
+
+`GET /public/config` 是匿名只读接口，两端口均提供，只返回is_public=1的键值，不返回内部元信息。类型支持string/integer/boolean/json；管理接口value统一传字符串，公开接口按类型转换。数据库连接密码、私钥等继续放服务器私有配置，不放此表。
+
+前端启动时读取公开配置：website.name用于登录页、侧栏、页脚及浏览器标题；website.home_title用于Dashboard标题；website.keywords和website.description更新对应meta标签。保存成功会刷新当前前端配置，其他已打开页面刷新后获取最新值；读取失败时保留默认/已有值。
+
+生产反向代理需要同时转发 `/system/` 和 `/public/config` 到后端。公开接口不依赖登录Token；不要将整个system_config表作为用户端响应。
+
+超管可在页面新增、编辑、删除分组和配置项，配置项可设置key、名称、值、类型、输入方式、排序、说明、公开范围和内置保护。分组编码创建后固定；普通配置可改key和移动分组；内置关键配置不能删除、改key、移动分组、改变数据类型或取消保护，仍可修改配置值与展示说明。新标记为内置后不能通过HTTP取消保护。
+
+仍只用system_config一张表：record_type=group记录分组（支持空组），record_type=item记录配置项；分组占位key以__group__.开头，内部使用，不能经配置项接口维护，也不在公开接口返回。普通配置项key全局唯一，使用小写字母、数字、下划线及点分段。分组名称统一保存，重命名会同步子项。删除普通分组会删除其普通配置项，页面明确确认；包含内置项的分组不允许删除。
+
+结构管理接口仅超管可用，且必须有启用的菜单节点。普通管理员即使关联结构管理菜单也不能操作；config_update仅允许改值，不允许借此修改定义或公开范围。
+
+| 操作 | HTTP接口 | 按钮菜单标识 |
+| --- | --- | --- |
+| 新增分组 | POST /system/config-groups | config_group_create |
+| 编辑分组 | PUT /system/config-groups/:group | config_group_update |
+| 删除分组 | DELETE /system/config-groups/:group | config_group_delete |
+| 新增配置项 | POST /system/config-items | config_item_create |
+| 编辑配置项 | PUT /system/config-items/:id | config_item_update |
+| 删除配置项 | DELETE /system/config-items/:id | config_item_delete |
+
+新增分组JSON示例：{"code":"payment","name":"支付设置"}。编辑分组提交name、version；删除分组/配置项提交当前version。新增配置项提交group_code、key、name、value、value_type、input_type、is_public、is_builtin、sort、remark；编辑另传当前version。类型与控件必须匹配（string→input/textarea、integer→number、boolean→switch、json→json）。所有value仍按字符串提交。
+
+分组结构及值变化会递增分组版本，配置项编辑会递增自身版本。旧页面遇到409须刷新；进行结构操作前先保存或放弃其他TAB修改。开发初始化数据仍使用增量迁移并保护已有值。
