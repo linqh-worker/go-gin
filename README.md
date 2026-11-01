@@ -40,18 +40,47 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 CREATE DATABASE demo CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 ```
 
-初始化结构并启动：
+### 1. 执行数据库迁移
 
 ```powershell
 go run ./cmd/migrate -f ./.env
+```
+
+确认迁移输出没有Failed。迁移创建账号、角色菜单、系统配置等业务表及migrations记录表，初始化基础角色和菜单，但**不会创建默认管理员或密码**。已有表和已执行迁移不会重复初始化，后续差异由增量迁移处理。
+
+### 2. 创建管理员并授予超管
+
+首次创建 `admin`，密码在终端隐藏输入，通过当前进程的环境变量传给创建命令。`Read-Host` 引号里的内容只是提示文字；出现提示后输入实际密码再按回车，输入内容不会显示，不要直接按回车：
+
+```powershell
+$adminSecret = Read-Host "设置管理员密码（至少8字符、不超过72字节）" -AsSecureString
+$env:SYSTEM_ADMIN_PASSWORD = [System.Net.NetworkCredential]::new('', $adminSecret).Password
+try {
+    go run ./cmd/admin -f ./.env -username admin -nickname 管理员
+    if ($LASTEXITCODE -ne 0) { throw "创建失败，请根据提示处理后重试" }
+} finally {
+    Remove-Item Env:SYSTEM_ADMIN_PASSWORD -ErrorAction SilentlyContinue
+}
+
+# 创建成功后，再给该账号授予超级管理员角色；这一步不需要密码
+go run ./cmd/admin -f ./.env -username admin --grant-super
+```
+
+**创建账号与授予超管是两个步骤，必须都完成。** 新建账号默认没有角色，只有创建账号而未授权，登录后不会显示业务菜单。
+
+管理员保存在system_admin表，密码以bcrypt哈希存储；不会创建到用户端user表。如果admin已存在，不要重复创建，直接执行上面的grant-super命令即可，该命令不修改原密码。详细说明见[使用文档](docs/USAGE.md#3-创建管理员与授予超管)。
+
+### 3. 启动并登录后台
+
+```powershell
 go build ./...
 go vet ./...
 go run ./cmd/api -f ./.env --module=all
 ```
 
-迁移创建六张业务表：`user`、`system_admin`、`system_role`、`system_menu`、`system_admin_role`、`system_role_menu`；另有框架的 `migrations` 记录表。空库初始化3个角色和27个菜单节点，不创建默认账号或密码。已有表跳过建表，不自动补齐结构差异。
+默认端口为 `:8088`。启动配套前端后，使用 `admin`、刚设置的密码和后台图片验证码登录。已登录账号刚授予角色时，退出重新登录以刷新菜单。
 
-默认端口为 `:8088`。`GET /` 查看服务信息，`GET /api/` 查看API模块，`GET /status` 查看数据库、Redis状态，同时检查 `data` 中组件状态。首次创建后台管理员见[使用文档](docs/USAGE.md#3-创建管理员与授予超管)。
+`GET /` 查看服务信息，`GET /api/` 查看API模块，`GET /status` 查看数据库、Redis状态，同时检查data中的组件状态。
 
 ## 架构与目录
 
