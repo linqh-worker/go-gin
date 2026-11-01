@@ -11,5 +11,4 @@ func Register(r *httpx.RouterGroup) {
 	RegisterApiRoutes(r)
 	RegisterLoginRoutes(r)
 	RegisterUserRoutes(r)
-	RegisterDemoRoutes(r.Group("/demo"))
 }

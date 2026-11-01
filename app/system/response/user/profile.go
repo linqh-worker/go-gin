@@ -2,7 +2,7 @@ package user
 
 type AuthUser struct {
 	Roles       []string `json:"roles"`
-	Permissions []string `json:"permissions"`
+	MenuIDs     []int    `json:"menu_ids"`
 	ID          int      `json:"id"`
 	Username    string   `json:"username"`
 	Nickname    string   `json:"nickname"`

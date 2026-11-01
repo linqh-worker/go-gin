@@ -2,9 +2,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"go-gin/internal/component/db"
+	modeldao "go-gin/model/dao"
+	"go-gin/model/do"
 	"os"
 	"regexp"
 	"strings"
@@ -14,9 +18,6 @@ import (
 	admin "go-gin/app/system/dao"
 	filex "go-gin/internal/file"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 func main() {
@@ -53,32 +54,34 @@ func run() error {
 		} `yaml:"db"`
 	}
 	filex.MustLoad(*path, &cfg)
-	database, err := gorm.Open(mysql.Open(cfg.DB.DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
+	db.InitConfig(db.Config{DSN: cfg.DB.DSN, MaxOpenConns: 2, MaxIdleConns: 1, LogLevel: "silent"})
+	if err := db.Connect(); err != nil {
 		return errors.New("连接数据库失败，请检查配置")
 	}
-	pool, err := database.DB()
-	if err != nil {
-		return err
-	}
-	defer pool.Close()
+	ctx := context.Background()
 	if *grantSuper {
-		err := database.Transaction(func(tx *gorm.DB) error {
+		err := db.Transaction(ctx, func(tx *db.TX) error {
 			var user struct{ ID int }
-			if err := tx.Raw("SELECT id FROM system_admin WHERE name=? AND status=1 AND deleted_at IS NULL FOR UPDATE", *name).Scan(&user).Error; err != nil {
+			if err := modeldao.SystemAdmin.Ctx(ctx).WithTX(tx).Where(do.SystemAdmin{Name: *name, Status: 1}).WhereNull("deleted_at").LockUpdate().One(&user); err != nil {
 				return err
 			}
 			if user.ID == 0 {
 				return errors.New("管理员不存在或已停用")
 			}
 			var role struct{ ID int }
-			if err := tx.Raw("SELECT id FROM system_role WHERE code='super_admin' AND status=1").Scan(&role).Error; err != nil {
+			if err := modeldao.SystemRole.Ctx(ctx).WithTX(tx).Where(do.SystemRole{Code: "super_admin", Status: 1}).One(&role); err != nil {
 				return err
 			}
 			if role.ID == 0 {
 				return errors.New("请先执行 RBAC 迁移")
 			}
-			return tx.Exec("INSERT INTO system_admin_role(admin_id,role_id) VALUES(?,?) ON DUPLICATE KEY UPDATE role_id=VALUES(role_id)", user.ID, role.ID).Error
+			q := modeldao.SystemAdminRole.Ctx(ctx).WithTX(tx)
+			exists, err := q.Where(do.SystemAdminRole{AdminId: user.ID, RoleId: role.ID}).Exist()
+			if err != nil || exists {
+				return err
+			}
+			_, err = q.Data(do.SystemAdminRole{AdminId: user.ID, RoleId: role.ID}).Insert()
+			return err
 		})
 		if err != nil {
 			return errors.New("授予超级管理员失败，请确认账号有效且已执行 RBAC 迁移")
@@ -94,7 +97,7 @@ func run() error {
 	empty := ""
 	age := 0
 	user := admin.AuthUser{Name: *name, Nickname: *nickname, PasswordHash: string(hash), Status: 1, Phone: &empty, Email: &empty, Age: &age, PasswordChangedAt: &now, CreatedAt: &now, UpdatedAt: &now}
-	if err := database.Table("system_admin").Create(&user).Error; err != nil {
+	if err := (admin.AuthRepository{}).Create(ctx, &user); err != nil {
 		return errors.New("创建管理员失败，请确认已执行迁移且用户名未被占用；已有账号不会覆盖")
 	}
 	fmt.Printf("管理员创建成功，ID=%d，用户名=%s\n", user.ID, user.Name)

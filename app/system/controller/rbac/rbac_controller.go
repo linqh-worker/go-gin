@@ -22,18 +22,6 @@ func Roles(ctx *httpx.Context) (any, error) {
 	rows, err := logic.Roles(ctx.Request.Context())
 	return rows, auth.HTTPError(err)
 }
-func Permissions(ctx *httpx.Context) (any, error) {
-	rows, err := logic.Permissions(ctx.Request.Context())
-	return rows, auth.HTTPError(err)
-}
-func RolePermissions(ctx *httpx.Context) (any, error) {
-	n, err := id(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := logic.RolePermissions(ctx.Request.Context(), n)
-	return rows, auth.HTTPError(err)
-}
 func AdminRoles(ctx *httpx.Context) (any, error) {
 	n, err := id(ctx)
 	if err != nil {

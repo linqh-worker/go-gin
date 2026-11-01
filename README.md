@@ -1,42 +1,32 @@
 # go-gin
 
-基于 Gin 的 Go 后端项目，采用单应用、单 HTTP 端口、多业务模块结构。用户端使用 `/api`，管理端预留 `/system`，按功能拆分控制器、业务、请求和响应。
+基于Gin、GORM、MySQL和Redis的Go后端开发基础。采用单应用、多模块结构：用户端 `/api`、管理端 `/system`，可共用一个端口，也可用同一程序启动两个进程分别监听。
 
-项目提供可继续扩展的开发基础，不包含完整后台管理系统或前端界面。
+已提供用户登录注册、图片验证码、独立后台认证、账号管理、角色与树形菜单授权，以及迁移、DAO生成、队列、定时任务和事件机制。可以在现有分层上继续开发业务；仓库不包含前端页面。
 
-## 文档导航
+## 文档入口
 
-| 文档 | 内容 |
+全项目维护以下四份主文档，根目录只保留本README：
+
+| 文档 | 用途 |
 | --- | --- |
-| [命令行说明](docs/COMMANDS.md) | 启动、迁移、代码生成、测试、编译 |
-| [模块与架构](docs/MODULES.md) | 目录职责、加载顺序、模块边界 |
-| [开发规范](docs/DEVELOPMENT.md) | 统一分层、命名、接口、数据库和测试规则，含新增业务示例 |
-| [配置与部署](docs/CONFIGURATION.md) | YAML 配置、日志、运行进程、故障排查 |
-| [认证接口](docs/API_AUTH.md) | 注册、登录、图片验证码、当前用户、退出 |
-| [密码加密与密钥备份](docs/PASSWORD_ENCRYPTION.md) | 已停用的历史加密方案说明 |
-| [用户表](docs/USER_SCHEMA.md) | 字段、索引、初始化迁移与表名前缀 |
-| [协作与提交](docs/CONTRIBUTING.md) | 分支、提交、GitHub 首次上传及变更交付 |
-| [AI 开发约定](docs/AGENTS.md) | 后续自动化修改必须遵守的项目规则 |
+| [项目说明](README.md) | 能力、架构、目录和快速开始 |
+| [开发流程说明](docs/DEVELOPMENT.md) | 从需求、建表到接口、授权、验证与交付 |
+| [开发约定](docs/AGENTS.md) | 人工与AI共同遵守的分层、数据及提交规则 |
+| [使用文档](docs/USAGE.md) | 配置、命令、接口调用、后台授权、部署与排错 |
 
-新成员按「本页快速开始 → 模块与架构 → 开发规范 → 对应接口文档」阅读。
-
-所有详细说明集中在 docs/。后续人工或 AI 开发前先阅读开发规范与 AI 开发约定；AGENTS.md、CLAUDE.md 已作为文档收纳，不再位于根目录供工具自动加载。
+新成员先完成快速开始，再按开发流程实现功能。修改项目之前阅读开发约定；`docs/AGENTS.md` 是普通文档，不会作为根目录规则自动加载，使用AI工具时应明确要求先阅读。
 
 ## 环境要求
 
-- Go **1.26.1 或更高**，以 `go.mod` 为准。
-- MySQL **8.0 或更高**，当前建表快照使用 `utf8mb4_0900_ai_ci`。
-- Redis：团队开发环境约定使用6.2或更高版本；用户认证、验证码、限流与 Asynq 队列使用同一配置实例。
-- Git；Docker 仅在选择容器开发时需要。
-
-应用本身通过 Lua 脚本实现验证码原子读取、删除，不依赖 GETDEL 命令。
-依赖版本以 `go.mod`、`go.sum` 为准；升级 Go 不代表需要同时升级全部依赖。
+- Go **1.26.1或更高**，版本以 `go.mod` 为准。
+- MySQL **8.0或更高**，当前迁移使用 `utf8mb4_0900_ai_ci`。
+- Redis：开发环境约定6.2或更高；认证、验证码、限流和Asynq使用Redis。
+- Git；Air仅用于开发热重载，Docker及 `.devcontainer` 为可选环境。
 
 ## 快速开始
 
-先获取仓库并进入项目根目录。以下命令使用 PowerShell，仓库地址由实际 GitHub 地址替换。
-
-### 1. 准备依赖和配置
+在项目根目录执行，下列命令使用PowerShell：
 
 ```powershell
 go version
@@ -44,102 +34,73 @@ go mod download
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-`.env` 实际是 **YAML**，不是 `KEY=VALUE` 格式。编辑它，填写 MySQL、Redis 的实际地址和认证信息。已有 `.env` 时不要用示例覆盖自己的配置。
-
-示例配置使用 `demo` 数据库。先通过数据库客户端创建数据库，并准备拥有所需权限的开发账号：
+`.env` 实际是 **YAML文件**。填写数据库、Redis和监听地址，不覆盖已有私有配置。先通过数据库客户端准备数据库及账号，例如：
 
 ```sql
 CREATE DATABASE demo CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 ```
 
-创建数据库、账号和授权属于数据库准备工作，迁移命令不会自动创建数据库。
-
-登录注册直接提交密码字符串，无需生成密钥或获取公钥；数据库继续保存 bcrypt 哈希。部署使用 HTTPS。
-
-### 2. 初始化表结构
+初始化结构并启动：
 
 ```powershell
 go run ./cmd/migrate -f ./.env
-```
-
-当前只有一份用户表初始化迁移：没有 `user` 表时创建完整结构，已有表时跳过。框架另外维护 `migrations` 执行记录表。
-已有表被跳过不代表结构已被校验或补齐，详见 [用户表说明](docs/USER_SCHEMA.md)。
-
-### 3. 验证代码
-
-```powershell
 go build ./...
 go vet ./...
+go run ./cmd/api -f ./.env --module=all
 ```
 
-仓库应提交表映射、DO、DAO 底层和枚举生成代码，正常克隆不需要先连接数据库才能编译。
-当前仓库按要求不保留测试文件，构建与静态检查通过不代表已执行业务测试。
-表结构改变后才运行生成器，并提交对应生成文件：
+迁移创建六张业务表：`user`、`system_admin`、`system_role`、`system_menu`、`system_admin_role`、`system_role_menu`；另有框架的 `migrations` 记录表。空库初始化3个角色和27个菜单节点，不创建默认账号或密码。已有表跳过建表，不自动补齐结构差异。
 
-```powershell
-go run ./cmd/make make:dao -f ./.env -t user,migrations
-gofmt -w model
+默认端口为 `:8088`。`GET /` 查看服务信息，`GET /api/` 查看API模块，`GET /status` 查看数据库、Redis状态，同时检查 `data` 中组件状态。首次创建后台管理员见[使用文档](docs/USAGE.md#3-创建管理员与授予超管)。
+
+## 架构与目录
+
+```text
+HTTP → router → 本端中间件 → controller → logic → DAO → MySQL
+                                ↓
+                         response → httpx统一响应
 ```
 
-### 4. 启动 HTTP
+`request` 定义输入、`response` 定义输出；业务错误由业务层返回，控制器转换后交给统一响应。`logic` 就是通常说的service层，不额外增加同职责service目录。
 
-```powershell
-go run ./cmd/api -f ./.env
+```text
+app/
+├── api/                  用户端：controller、logic、request、response、dao、middleware、router
+└── system/               管理端：同上；authorization维护公开/个人/超管接口边界
+cmd/                      api、admin、queue、cron、migrate、make命令入口
+config/                   YAML配置、响应和环境初始化
+const/                    枚举、错误定义
+model/                    生成的entity、do、dao
+migration/                建表、增量变更和基础数据迁移
+internal/                 httpx、数据库、Redis、日志、队列等组件
+util/                     公共工具，如时间格式化
+rest/                     请求其他系统HTTP接口的客户端
+cron/ task/ event/         定时任务、异步任务、事件及注册
+router/                   模块选择和公共路由
+storage/                  日志、运行文件与本地备份
 ```
 
-默认示例监听 `:8088`，可访问：
+功能按业务拆目录，如 `app/system/controller/account`；model与基础组件可共用，身份及业务权限仍按端隔离。
 
-- `GET http://127.0.0.1:8088/`：服务与模块信息。
-- `GET http://127.0.0.1:8088/api/`：API 模块信息。
-- `GET http://127.0.0.1:8088/system/ping`：后台模块存活检查。
-- `GET http://127.0.0.1:8088/status`：数据库和 Redis 检查结果，需检查响应数据中的组件状态。
-
-HTTP 启动入口叫 `cmd/api`，但同时提供 API 和 System 两个模块。队列消费者和定时任务需要在独立终端分别启动，见 [命令行说明](docs/COMMANDS.md)。
-
-## 当前能力
+## 当前能力与边界
 
 | 能力 | 当前实现 |
 | --- | --- |
-| 路由与中间件 | Gin 的 httpx 封装、模块路由组、统一响应、追踪标识 |
-| 用户认证 | RSA-OAEP密码字段密文、bcrypt、图片验证码、Redis Token、退出及账号状态检查 |
-| 数据访问 | GORM/MySQL、生成的 entity/do/dao、模块独立 DAO |
-| 迁移 | Go 文件注册、Up 执行、时间戳排序、执行记录 |
-| 后台 | 独立目录与 `/system/ping`，尚未实现管理员登录和 RBAC |
-| 异步任务 | Asynq、Redis、独立 worker、IP 白名单限制的队列监控 |
-| 定时任务 | cron 独立进程和示例任务，尚无跨进程单实例调度锁 |
-| 事件与外部服务 | event/listener 注册、rest 客户端示例 |
-| 日志 | zerolog，HTTP/外部请求/队列/定时任务分类；尚未按 api/system 分文件 |
+| 用户认证 | 用户名/密码、bcrypt、图片验证码、注册自动登录、Redis随机Token、退出 |
+| 后台认证 | 独立管理员表、验证码、Token和限流；无公开注册 |
+| 账号管理 | 用户与管理员列表、详情、新增、资料修改、启停 |
+| 后台授权 | 管理员关联角色，角色关联树形菜单；菜单保存HTTP方法与接口路径 |
+| 数据访问 | 生成的DAO/do/entity、模块DAO、事务与行锁 |
+| 迁移和生成 | 时间戳排序Up、执行记录、指定表DAO及枚举生成 |
+| 异步与定时 | Asynq独立worker、cron独立进程、事件监听 |
+| 日志与追踪 | 分类日志、requestId；尚未按api/system自动分文件 |
 
-目前没有迁移回滚命令、请求/响应/控制器代码生成器、手机或邮箱验证、密码找回、资料编辑接口。不要把目录预留或示例当作已完成业务。
+Token有效期7天，**不是JWT**。密码直接通过JSON提交，数据库存bcrypt哈希，部署使用HTTPS；当前不要求请求体RSA加密或公钥接口。
 
-## 统一响应
+目前没有前端页面、密码找回、短信/邮箱验证、用户端自行修改资料、账号物理删除或刷新Token接口；迁移没有回滚命令和并发锁，cron没有跨副本调度锁。HTTP超时及自定义优雅退出需按部署需求完善。
 
-正式入口通过 `config.InitGlobalVars()` 使用下列外层格式：
+## 验证记录
 
-```json
-{
-  "code": 200,
-  "msg": "成功",
-  "data": {},
-  "requestId": "请求追踪标识"
-}
-```
+2026-11-01在独立MySQL库、空闲Redis逻辑库中，通过真实本机HTTP请求完成139项断言，覆盖认证、账号管理、角色菜单授权及主要拒绝路径。临时环境清理完毕，原开发库六表内容指纹一致。详细范围见[使用文档](docs/USAGE.md#10-验证记录)，不代表前端、TLS、并发和故障恢复已验证。
 
-外层 `code` 是业务码。`data.status` 如果出现，是账号状态，两者含义不同。
-业务错误通常仍为 HTTP 200，调用方必须同时判断外层 `code`；未登录使用 HTTP 401，限流使用 HTTP 429。
-底层 httpx 未初始化时使用另一组默认字段，正式接口和接口测试应以入口初始化后的格式为准。
-
-## 开发约定
-
-新增功能按相同业务目录组织 `request → controller → logic → dao → response`，保持调用职责清晰，具体依赖关系见 [架构说明](docs/MODULES.md)。
-数据库字段变更先写迁移，再执行、生成 DAO、更新请求与响应。已执行并共享的迁移不重写；用户端与管理端身份校验分别实现。
-
-`.env.example` 可以提交；`.env`、环境私有配置、日志和二进制不提交。生成的 Go 代码随迁移一起提交，详见 [协作规范](docs/CONTRIBUTING.md)。
-
-后台管理员初始化与登录流程见 [后台认证](docs/SYSTEM_AUTH.md)。
-
-合并启动：go run ./cmd/api -f ./.env --module=all；分端启动增加 --module=api --port=:8088 或 --module=system --port=:8089，详见 [命令说明](docs/COMMANDS.md)。
-
-后台角色授权与权限中间件见 [RBAC 使用文档](docs/SYSTEM_RBAC.md)。
-
-后台目录、菜单、按钮的上下级结构与角色菜单授权见 [菜单树文档](docs/SYSTEM_MENU.md)。
+环境私有配置、日志、二进制和数据库备份不提交；源代码、迁移及生成代码随项目提交。后续按[开发流程说明](docs/DEVELOPMENT.md)新增功能。

@@ -1,112 +1,127 @@
-# 统一业务开发规范
+# 项目开发流程说明
 
-本规范用于后续新增功能与被修改的旧代码。保持已有对外接口兼容；目录统一不等于每次都要重构全部存量代码。
-只有实际需要时才新增层、接口和目录，不建立没有业务用途的空包。
+本篇回答“一个功能从哪里开始、按什么顺序写”。固定规则见[开发约定](AGENTS.md)，启动、配置和接口调用见[使用文档](USAGE.md)，整体架构见 [README](../README.md)。
 
-## 1. 目录与命名
+## 1. 先确定功能边界
+
+开始前明确：属于用户端api还是管理端system，输入输出是什么，是否登录、需要访问哪张表、能操作谁的数据、成功和失败是什么。
+
+真实请求顺序是：
 
 ```text
-app/<module>/
-├── controller/<feature>/   HTTP 请求入口
-├── logic/<feature>/        业务规则与流程
-├── request/<feature>/      请求参数、绑定标签和格式校验
-├── response/<feature>/     对外响应字段
-├── dao/                    端专属的数据访问，需要时再细分 feature
-├── transformer/            数据到响应的转换，需要时使用
-├── middleware/             本端身份、权限、限流等
-└── router/                 路由与中间件注册
+router → 本端middleware → controller → logic → DAO → MySQL
+                                ↑          ↓
+                       响应映射 ← 结果或错误
 ```
 
-- module 使用 api、system 等端名称；feature 使用 user、auth、order 等业务含义。
-- 手写文件使用小写 snake_case，如 update_profile_logic.go；同目录 package 名使用对应功能，如 user。
-- 请求类型以 Req 结尾，响应以 Resp 结尾；现有 AuthUser 等嵌套数据类型保留，不强行改对外字段。
-- 新手写字段使用 ID、URL、IP 等 Go 常见缩写；生成代码遵守生成器输出，不手动批量改名。
-- 功能可有多个文件，不把注册、资料、订单等所有业务塞进一个大文件。
-- 同名功能包导入时明确别名，如 userRequest、userResponse、userLogic、userController。
-- 不使用旧 typing 目录，不在项目根目录新建散落的 controller、logic 或重复的公共框架。
+request和response是输入输出的数据定义，不是额外运行的服务层。logic承担service职责；auth_error等文件存放错误及转换，不是每次请求依次进入的下一层。
 
-## 2. 各层职责
+开发可以先定义request/response，再写logic、DAO、controller，最后注册router。简单功能不用复制所有层：不查库就不用DAO，没有业务复用也不用新接口包装。
 
-| 层 | 应做 | 不应做 |
+## 2. 有表结构变化时先做迁移
+
+以下以未来的orders表为例，命令在项目根目录执行：
+
+```powershell
+go run ./cmd/make make:migration create_orders
+```
+
+生成器仅创建模板。打开 `migration/` 新文件，填写Up里的建表SQL，设计字段类型、默认值、NULL、主键、唯一索引、关联和中文注释，再确认配置指向独立开发/测试库：
+
+```powershell
+go run ./cmd/migrate -f ./.env.testing
+go run ./cmd/make make:dao -f ./.env.testing -t orders
+gofmt -w model
+```
+
+执行顺序是“迁移定义 → 数据库表 → 生成Go映射”。生成DAO不会创建表，也不会从数据库自动导出迁移。已有表新增字段时另建 `add_orders_remark` 等增量迁移；修改已执行文件不会自动重跑。
+
+| 生成位置 | 用途 | 重复执行 |
 | --- | --- | --- |
-| router | HTTP 方法、路径、认证与权限中间件挂载 | 编写 SQL 或业务流程 |
-| controller | 解析 request、读取可信身份、调用 logic、映射返回错误 | 实现事务、密码规则、余额或状态流转 |
-| request | 明确输入字段，json/form/uri 标签，格式和范围校验 | 当作数据库实体，接收客户端权限和可信身份 |
-| logic | 校验业务条件、权限范围、状态流转、事务与外部调用编排 | 依赖 Gin Context 或在业务中注册路由 |
-| dao | 带 context 的查询、写入与数据库约束错误转换 | 直接返回 HTTP JSON 或信任请求中的当前用户ID |
-| response | 定义允许公开的字段和嵌套结构 | 导出密码哈希、完整内部状态或数据库实体全集 |
-| transformer | 明确的数据到响应映射 | 隐式查库或改变业务状态 |
+| model/entity | 表结构映射 | 覆盖 |
+| model/do | 查询条件/写入对象，字段为any | 覆盖 |
+| model/dao/internal | 表名、列名、Ctx、事务封装 | 覆盖 |
+| model/dao/*.go | 外层DAO，可补定制查询 | 已存在则跳过 |
 
-数据库表对应 entity，查询/写入对象对应 do；它们与 request/response 不要求字段相同。
-请求体经校验后显式映射到写入字段，不能直接把整个 JSON map 交给数据库 Updates。
+生成后查看diff，提交生成代码。需要修改生成结构时改表和生成来源，不直接手改内部生成文件；被删除表的旧生成文件需另行审查清理。
 
-## 3. 请求与响应
+## 3. 定义request和response
 
-- JSON 写入使用显式 json 标签；GET 查询使用 form 标签；路径参数使用 uri 标签并单独绑定。
-- 必填、长度、范围、枚举等格式在 request 校验；用户名唯一、资源归属、账号状态、库存等在 logic/数据库保证。
-- 当前用户名登录请求至少8字符密码，bcrypt 输入不超过72字节；不能因加字段而绕过已有校验。
-- 登录注册直接接收密码字符串，不要求 encryption；数据库保留 bcrypt 哈希，部署使用 HTTPS。
-- 当前用户ID来自 TokenCheck 写入的 user_id 或当前用户对象；客户端字段不能充当身份来源。
-- 可信IP、账号状态、权限、创建者、密码哈希由服务器赋值。不要新增接收这些字段的普通用户参数。
-- 分页接口统一采用 page（默认1）、page_size（默认20，最大100）；新接口在 request/logic 中实现默认值及上限，不假设框架自动分页。
-- 列表响应按需提供 items、total、page、page_size；空列表约定返回 []，并在转换处初始化切片。现有旧接口的 data 字段不擅自改名。
-- JSON 新字段统一 snake_case；外层 requestId 是既有兼容字段，保留当前形式。
+使用业务目录，例如用户资料放 `request/user`、`response/user`。输入只包含用户允许提交的字段，输出只包含允许公开的字段。
 
-正式入口的外层格式固定为 `code/msg/data/requestId`。成功业务码为200，业务错误通常 HTTP 200，需要同时判断外层 code。
-401 表示身份失效，403 表示权限不足，404 表示资源或路由不存在，429 表示限流；基础设施异常使用500/503。
-data.status 如果是账号状态，需要在接口文档中与外层 code 区分。
-控制器返回 `(any, error)`，交给 httpx 统一写响应；不要既 ctx.JSON 又返回普通结果导致写两次。文件下载等流式响应沿用对应组件的专用处理方式。
+更新接口用指针区分“未提交”和“提交零值”：
 
-## 4. 错误处理
+```go
+type UpdateReq struct {
+    Nickname *string `json:"nickname" binding:"omitempty,max=50"`
+    Age      *int    `json:"age" binding:"omitempty,gte=0,lte=150"`
+}
+```
 
-可预期业务失败使用已定义的业务错误。新增稳定错误码放 const/errcode，先检索已有编号，避免与当前20001至20007等冲突。
-内部操作保留原始 cause 便于 errors.Is/errors.As；对客户端转换为已知消息，不直接暴露 SQL、Redis 错误或第三方响应。
-现有认证通过 auth.HTTPError 做边界映射；新业务使用自己的明确错误映射，不拿认证错误覆盖所有业务。
-不要忽略数据库写入、事务提交、Redis 登录态创建等关键错误。补偿失败需记录安全的诊断信息，不能假装操作完整成功。
+`Age == nil` 表示不修改；`Age != nil && *Age == 0` 表示明确更新为0。账号状态、角色分配应使用专门接口，不混入普通资料请求。
 
-## 5. 身份与数据权限
+## 4. DAO沿用生成器工作流
 
-- 公开接口和私有接口使用不同路由组，私有组先挂身份中间件再注册 handler。
-- 用户端身份不能作为管理员身份，System 新增敏感功能须先实现自己的管理员认证和权限。
-- 数据查询/更新同时约束资源ID和归属用户，不能只在页面隐藏按钮。
-- 账号停用和软删除继续在认证时检查，不能只相信 Token 曾经签发过。
-- 金额、价格、角色、资源拥有者等由服务端计算或校验，不相信客户端提交的结果。
-- 退出、修改、删除等有状态操作不用 GET，不随意使用 Any 注册正式业务。
-- `/api/demo/*` 和旧用户管理 logic 是示例，新增正式业务不要直接复制其 GET 写入、无分页全表查询等模式。
+在模块DAO内组合生成的公共DAO和DO，例如：
 
-## 6. 数据库与迁移
+```go
+package dao
 
-新表流程为「生成迁移模板 → 设计 Up SQL → 执行开发库迁移 → 生成指定表 DAO → 开发业务 → 测试」。
-当前 user 基线只负责创建一张完整用户业务表，已有表跳过；框架维护 migrations 记录。后续改字段新增增量迁移。
+import (
+    "context"
+    modeldao "go-gin/model/dao"
+    "go-gin/model/do"
+    "go-gin/model/entity"
+)
 
-- 表名、字段、索引及注释明确；项目不要求应用前缀，后台表可用 system_admins 等模块语义命名。
-- 当前 user 是历史单数表名，不为了新命名规范擅自改名；新表可以采用业务含义明确的小写 snake_case。
-- 必填和可空要区分；手机号/邮箱的空值和唯一性按实际验证流程设计，不以空串默认值代替所有 NULL。
-- 存金额用整数最小货币单位或明确精度的 DECIMAL，不用 float64 进行资金计算。
-- 唯一性由数据库约束保证，提前查重只能改善提示，不能替代唯一索引。
-- 查询传递 context，SQL 使用参数化；动态排序、表名、列名不能直接拼接用户输入，需白名单。
-- 使用稳定排序和分页，避免正式列表接口无上限读取全表。
-- 多表一致性在 logic 编排事务；事务中的 DAO 必须使用同一 tx，不能中途回到全局连接。
-- 并发计数使用数据库原子自增或适当锁，状态变化用带原状态的条件更新并检查影响行数。
-- 外部 HTTP、支付和队列投递不天然与数据库事务原子一致，需要按业务设计幂等键、补偿或 outbox，不能把网络调用塞进长事务当成一致性保证。
-- 当前迁移工具没有回滚/并发锁，不并行执行多个迁移进程，执行后检查日志与记录。
+func FindEnabledUser(ctx context.Context, id int) (*entity.User, error) {
+    var row entity.User
+    found, err := modeldao.User.Ctx(ctx).
+        WherePri(id).
+        Where(do.User{Status: 1}).
+        WhereNull("deleted_at").
+        Found(&row)
+    if err != nil { return nil, err }
+    if !found { return nil, nil }
+    return &row, nil
+}
+```
 
-生成的 entity/do/dao/internal 和枚举文件随迁移提交；不直接编辑它们实现业务。定制代码放外层 DAO 或模块 DAO。
-生成器不会删除旧文件，也可能只完成部分输出；生成后查看变更并运行 gofmt、测试。
+不能将返回entity直接输出到HTTP；由logic/controller转换为response。用户私有资源还要加当前用户ID或资源归属条件。
 
-## 7. 日志、任务与外部服务
+零值更新示例：
 
-业务日志使用 logx.WithContext(ctx)，记录操作、资源ID、结果和必要的错误，不记录密码、Token、验证码答案、完整请求头或配置。
-用户输入可以包含隐私和控制字符，不把整份请求体直接打印。
+```go
+rows, err := modeldao.User.Ctx(ctx).
+    WherePri(id).
+    Data(do.User{Age: 0}).
+    Update()
+```
 
-队列任务定义在 task，注册在 task/init.go；事件监听在 event/init.go 注册；定时任务在 cron/init.go 注册。
-异步任务应带必要的业务ID，设计重复执行不会重复扣款、发货或插入的幂等行为；不能仅凭任务已投递就向用户宣称业务已完成。
-当前 Asynq 使用 Redis，不依赖 MySQL jobs 表。当前 cron 没有跨副本锁，同一环境保持单调度进程。
-rest 客户端按服务封装，明确超时、重试条件和错误映射；对非幂等操作不要无条件重试。
+DO字段名以生成结果为准，如Id、AvatarUrl、RegisterIp；nil表示不参与写入。新增需要ID时用 `InsertAndGetId()`，Insert返回的是影响行数。
 
-## 8. 示例：新增当前用户问候接口
+事务调用示例，放在实际需要一致性的业务/DAO中：
 
-以下是开发步骤示例，文件并未自动加入现有业务。这个接口只读取中间件已验证的用户，不查数据库，因此无需为它创建迁移或 DAO。
+```go
+return db.Transaction(ctx, func(tx *db.TX) error {
+    var current entity.User
+    found, err := modeldao.User.Ctx(ctx).WithTX(tx).
+        WherePri(id).LockUpdate().Found(&current)
+    if err != nil { return err }
+    if !found { return errorx.New(10001, "用户不存在") }
+    _, err = modeldao.User.Ctx(ctx).WithTX(tx).
+        WherePri(id).Data(do.User{Nickname: nickname}).Update()
+    return err
+})
+```
+
+这里涉及的db、entity、do、errorx和modeldao分别从框架及model包导入。所有事务语句使用同一个tx，具体业务还需检查状态、归属等条件。
+
+## 5. 写logic，再由controller调用
+
+logic处理业务规则、调用DAO或rest，返回数据/错误；controller只做请求处理和响应边界。logic不导入Gin，也不直接写HTTP JSON。
+
+下面给出可按文件手写的简单例子：新增登录后的问候接口。它不查库，因此无需迁移或DAO。
 
 ### 请求：app/api/request/user/greeting.go
 
@@ -161,9 +176,9 @@ import (
     "go-gin/app/api/middleware"
     userRequest "go-gin/app/api/request/user"
     userResponse "go-gin/app/api/response/user"
-    "go-gin/const/errcode"
     "go-gin/internal/errorx"
     "go-gin/internal/httpx"
+    "go-gin/internal/httpx/validation"
 )
 
 type greetingController struct{}
@@ -172,37 +187,65 @@ var GreetingController = &greetingController{}
 func (c *greetingController) Show(ctx *httpx.Context) (any, error) {
     var req userRequest.GreetingReq
     if err := ctx.ShouldBindQuery(&req); err != nil {
-        return nil, errcode.NewDefault("问候前缀最多20个字符")
+        return nil, validation.Error(err, &req)
     }
-    value, exists := ctx.Get(middleware.CurrentUserKey)
-    current, ok := value.(*userResponse.AuthUser)
-    if !exists || !ok || current == nil { return nil, errorx.ErrUnauthorized }
+    raw, exists := ctx.Get(middleware.CurrentUserKey)
+    current, ok := raw.(*userResponse.AuthUser)
+    if !exists || !ok || current == nil {
+        return nil, errorx.NewServerError(401)
+    }
     return userLogic.NewGreetingLogic().Handle(ctx.Request.Context(), current.Nickname, req)
 }
 ```
 
-### 路由
+### 路由：app/api/router/user.go
 
-在 app/api/router/user.go 的现有 private 组中添加，controller 已是 user 控制器包的别名：
+在现有private组添加；该文件已有controller作为user控制器包的别名：
 
 ```go
 private.GET("/user/greeting", controller.GreetingController.Show)
 ```
 
-完整路径为 GET /api/user/greeting，继承 TokenCheck，不把身份校验重复写进 logic。
-对更复杂的资源变更，再补充模块 DAO、事务、数据归属与相关测试，不要为这个简单例子额外复制框架。
+完整路径为 `GET /api/user/greeting?prefix=早上好`，请求携带API Bearer Token。示例尚未加入业务源文件，不能在未实现时直接调用。
 
-## 9. 测试与完成标准
+## 6. 注册新功能和后台权限
 
-- 新业务测试优先与对应包同目录，测试名称说明行为，而不是只验证自己写出的字段排列。
-- 认证、权限、唯一性、状态变化、并发写入等修改必须验证拒绝路径和失败后的状态。
-- 当前测试文件已按要求清除，不自动恢复；后续安排自动化测试时，优先使用内存依赖或模拟仓储，真实库验证只使用开发库并清理临时数据。
-- 请求或响应字段变化同步接口文档；表结构变化同步迁移、生成代码和字段说明。
-- 使用 gofmt，完成 go build ./... 与 go vet ./...；报告实际业务验证，不把编译成功当作测试覆盖。
-- 交付说明写清改了什么、验证了什么、是否需要执行迁移、是否影响调用方。未完成的功能明确列出，不以目录或模板代替实现。
+同一功能继续放现有业务包；新功能如orders新增模块router文件并从该端router/init.go调用注册函数。
 
-完整命令见 [COMMANDS.md](COMMANDS.md)，提交规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+API公开接口放公开组，私有接口复用该端TokenCheck。System模块入口已统一挂Authorize，新敏感接口不再逐个套Token中间件。
 
-公共绑定错误使用 `internal/httpx/validation.Error(err, &req)`；需要验证码等专属提示时，先用 `validation.Normalize(err, &req)` 获取字段错误，匹配专属规则后，其余交给 `validation.Error(err, nil)`。此转换属于 controller 请求处理，不放 logic。
+后台新增接口还需要：
 
-新建业务表必须为表和每个字段添加中文 COMMENT，说明状态枚举、关联ID、空值和默认值含义。现有表注释补全由 CompleteTableComments20261031220000 执行，读取原列定义后仅更新注释。
+1. 注册明确的HTTP方法与路径，如 `GET /system/orders/:id`。
+2. 在对应页面下创建button或api菜单节点，填写method、api_path完整模板。
+3. 给角色关联该节点，再给管理员关联角色。
+4. 分别验证获授权、未授权、不同方法、动态ID、角色/父菜单停用和撤权。
+
+只加路由会默认403，超管也必须有有效的菜单配置。新增“永久基础功能”的节点应通过新数据迁移提供，不能只在本机数据库点选后就认为别人克隆也有配置。公开/个人/超管边界维护在 `app/system/authorization/routes.go`，只有业务明确需要时才修改。
+
+## 7. 接入任务、事件和其他系统
+
+- 需要异步执行：task中定义任务和处理器，在task/init.go注册，HTTP进程投递、queue进程消费；参考现有SampleTask。
+- 需要周期执行：在cron定义job并由cron/init.go注册，独立启动cmd/cron，先调整现有示例调度。
+- 需要事件：event定义事件并由event/init.go关联listener。
+- 调用第三方/其他业务系统：在rest按服务封装HTTP客户端，由logic调用，配置在svc；它与本项目接收请求的controller方向不同。
+
+先明确幂等、重试、错误和日志；需要哪些进程再启动哪些，登录注册不依赖运行cron或worker。
+
+## 8. 验证与交付顺序
+
+```powershell
+# gofmt只处理本次修改的Go文件，以下按实际路径替换
+# gofmt -w app/api/controller/user/greeting_controller.go
+
+go build ./...
+go vet ./...
+git diff --check
+git status --short
+```
+
+按实际变更验证成功/失败、缺失/无效身份、越权、重复请求、零值、停用及事务失败。数据库验证使用隔离环境，不能依赖被测ID直接清理真实数据。
+
+当前不保留永久测试文件，也没有可直接复跑139项HTTP验证的命令。临时验证按任务范围编写、执行后清理并记录结果；过去通过不代替新变更验证。
+
+交付时同时提供源代码、迁移、生成代码和文档，写明需要先执行的迁移及行为变化；命令与接口更新到USAGE，稳定规则更新到AGENTS，能力变化更新README。部署先迁移再启动新版本，详见[使用文档](USAGE.md)。

@@ -9,10 +9,8 @@ import (
 	"strings"
 )
 
-func Roles(ctx context.Context) ([]dao.Role, error)              { return dao.Roles(ctx) }
-func Permissions(ctx context.Context) ([]dao.Permission, error)  { return dao.Permissions(ctx) }
-func RolePermissions(ctx context.Context, id int) ([]int, error) { return dao.RolePermissions(ctx, id) }
-func AdminRoles(ctx context.Context, id int) ([]int, error)      { return dao.AdminRoles(ctx, id) }
+func Roles(ctx context.Context) ([]dao.Role, error)         { return dao.Roles(ctx) }
+func AdminRoles(ctx context.Context, id int) ([]int, error) { return dao.AdminRoles(ctx, id) }
 func SetAdminRoles(ctx context.Context, id int, roles []int) error {
 	return dao.SetAdminRoles(ctx, id, roles)
 }
@@ -27,5 +25,5 @@ func SaveRole(ctx context.Context, id int, r request.RoleReq) error {
 	if id == 0 && (!regexp.MustCompile(`^[a-z][a-z0-9_]{2,63}$`).MatchString(r.Code) || r.Code == "super_admin") {
 		return errorx.New(10001, "角色编码须为3至64位小写字母数字下划线，且不可使用保留编码")
 	}
-	return dao.SaveRole(ctx, id, r.Code, r.Name, *r.Status, r.PermissionIDs)
+	return dao.SaveRole(ctx, id, r.Code, r.Name, *r.Status)
 }

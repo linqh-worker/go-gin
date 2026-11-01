@@ -125,7 +125,7 @@ func (s *AuthService) createLogin(ctx context.Context, userID int, ip string) (*
 		_ = s.Store.Revoke(ctx, token)
 		return nil, err
 	}
-	profile.Roles, profile.Permissions = access.Roles, access.Permissions
+	profile.Roles, profile.MenuIDs = access.Roles, access.MenuIDs
 	return &authResponse.LoginResp{Token: token, TokenType: "Bearer", ExpiresIn: int(tokenTTL.Seconds()), User: profile}, nil
 }
 
@@ -146,6 +146,6 @@ func (s *AuthService) Current(ctx context.Context, token string) (*userResponse.
 	if err != nil {
 		return nil, err
 	}
-	resp.Roles, resp.Permissions = access.Roles, access.Permissions
+	resp.Roles, resp.MenuIDs = access.Roles, access.MenuIDs
 	return &resp, nil
 }

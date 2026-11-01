@@ -14,8 +14,6 @@ func RegisterLoginRoutes(r *httpx.RouterGroup) {
 	login := r.Group("")
 	login.Before(middleware.AuthRateLimit("login", 10))
 	login.POST("/login", controller.LoginController.Login)
-	private := r.Group("")
-	private.Before(middleware.TokenCheck())
-	private.GET("/me", user.UserController.Me)
-	private.POST("/logout", user.UserController.Logout)
+	r.GET("/me", user.UserController.Me)
+	r.POST("/logout", user.UserController.Logout)
 }

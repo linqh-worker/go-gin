@@ -30,6 +30,7 @@ type Model struct {
 	limit      int
 	offset     int
 	unscoped   bool
+	lockUpdate bool
 }
 
 type whereClause struct {
@@ -51,6 +52,21 @@ func newModel(ctx context.Context, table string) *Model {
 func (m *Model) SetPrimaryKey(pk string) *Model {
 	model := m.clone()
 	model.primaryKey = pk
+	return model
+}
+
+// WithTX binds generated DAO operations to the supplied transaction.
+func (m *Model) WithTX(tx *TX) *Model {
+	model := m.clone()
+	model.db = tx.db
+	model.ctx = tx.ctx
+	return model
+}
+
+// LockUpdate locks selected rows until the transaction completes.
+func (m *Model) LockUpdate() *Model {
+	model := m.clone()
+	model.lockUpdate = true
 	return model
 }
 
@@ -263,6 +279,9 @@ func (m *Model) buildQuery() *gorm.DB {
 		query = query.Unscoped()
 	}
 
+	if m.lockUpdate {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
 	return query
 }
 
@@ -318,16 +337,24 @@ func (m *Model) InsertAndGetId() (int64, error) {
 		return 0, errorx.TryToDBError(result.Error)
 	}
 	if dataMap, ok := data.(map[string]any); ok {
+		// GORM uses @id for map inserts without an entity schema.
+		if id, ok := dataMap["@id"].(int64); ok {
+			return id, nil
+		}
 		if id, exists := dataMap["id"]; exists {
 			switch v := id.(type) {
 			case int64:
 				return v, nil
 			case int:
 				return int64(v), nil
+			case uint64:
+				return int64(v), nil
+			case uint:
+				return int64(v), nil
 			}
 		}
 	}
-	return result.RowsAffected, nil
+	return 0, fmt.Errorf("insert succeeded but generated primary key was not returned")
 }
 
 func (m *Model) Update() (int64, error) {

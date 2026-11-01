@@ -14,7 +14,6 @@ import (
 	"go-gin/internal/httpx/validators"
 	"go-gin/internal/queue"
 	_ "go-gin/internal/util"
-	"go-gin/middleware"
 	"go-gin/router"
 	"go-gin/util"
 	"net"
@@ -71,7 +70,6 @@ func main() {
 
 	// 初始化http服务
 	engine := initHttpServer()
-
 	// 挂载监控
 	if *module != "api" {
 		mountMonitor(engine)
@@ -94,7 +92,6 @@ func initHttpServer() *httpx.Engine {
 	}
 	engine := httpx.Default()
 	validators.Init()
-	middleware.Init(engine)
 	if err := router.InitModule(engine, *module); err != nil {
 		panic(err)
 	}
