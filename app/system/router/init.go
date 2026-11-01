@@ -13,5 +13,6 @@ func Register(r *httpx.RouterGroup) {
 	RegisterRBACRoutes(r)
 	RegisterMenuRoutes(r)
 	RegisterAccountRoutes(r)
+	RegisterConfigRoutes(r)
 
 }
