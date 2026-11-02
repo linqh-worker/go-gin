@@ -2,6 +2,51 @@
 
 本篇回答“一个功能从哪里开始、按什么顺序写”。固定规则见[开发约定](AGENTS.md)，启动、配置和接口调用见[使用文档](USAGE.md)，整体架构见 [README](../README.md)。
 
+## 接口开发速查
+
+先按 [README](../README.md#配套前端与启动)完成前后端联调。以下是写代码的顺序，以后台orders功能为例，目录不存在时手动创建：
+
+| 顺序 | 修改位置 | 工作内容 |
+| --- | --- | --- |
+| 1 | 接口约定 | 确定HTTP方法、路径、字段、分页、登录及数据归属 |
+| 2 | migration/ → 数据库 → model/ | 有表变化先编写迁移、执行迁移，再生成对应表代码；无变化跳过 |
+| 3 | app/system/request/orders、response/orders | 定义输入校验和允许公开的响应字段 |
+| 4 | app/system/dao/ | 使用model/dao和model/do查询，接收context.Context |
+| 5 | app/system/logic/orders/ | 按需处理业务规则、事务、状态变化及复用逻辑 |
+| 6 | app/system/controller/orders/ | 绑定参数、取可信身份、调用业务、返回(any,error) |
+| 7 | app/system/router/ | 注册方法与路径，新注册函数从本端init.go调用 |
+| 8 | system_menu及角色关联 | 配置接口方法和路径模板，再关联角色；未配置默认拒绝 |
+| 9 | 前端API与页面 | 对接真实请求，配置页面映射及按钮显隐，完成验证 |
+
+简单查询/CRUD可走 `router → middleware → controller → 模块DAO → MySQL`，不强制建立logic。需要事务、多步业务或复用规则时再使用logic。request/response只是数据定义，不是额外运行层。
+
+### 哪些代码可以用命令创建
+
+命令在后端仓库根目录执行；这是项目提供的工具，不是Gin自带功能。
+
+| 对象 | 命令或操作 | 自动完成的范围 |
+| --- | --- | --- |
+| 迁移模板 | `go run ./cmd/make make:migration create_orders` | 创建migration文件及init注册；Up里的SQL手写 |
+| 数据库表 | `go run ./cmd/migrate -f ./.env` | 执行未运行的迁移，执行前核对目标开发库 |
+| 表映射 | `go run ./cmd/make make:dao -f ./.env -t orders` | 从已有表生成entity、do、dao/internal及外层dao |
+| 多表映射 | `go run ./cmd/make make:dao -f ./.env -t orders,order_items` | 仅处理指定表，表必须已存在 |
+| 枚举方法 | `go run ./cmd/make make:enum` | 扫描const/enum已有定义，生成辅助方法；定义本身先手写 |
+| controller、logic、模块DAO | 手动创建目录和Go文件 | 当前没有make:controller、make:logic等命令 |
+| request、response、router、中间件 | 手动编写并接入注册点 | 当前没有对应生成命令 |
+| 前端页面、请求方法、菜单授权 | 手动编写/配置 | DAO生成不会生成页面、路由或权限 |
+
+Go包由目录内Go文件的package声明形成，无需额外运行“注册包”命令。生成entity/do/dao/internal会覆盖，外层dao已存在则跳过；不要手改内部生成文件。make工具还提供auth-key系列密钥管理命令，与接口代码生成无关，当前登录不要求使用。
+
+### 前端接入与接口交付
+
+1. 后端统一返回 `{code,msg,data,requestId}`，业务成功code=200。前端在 `src/api/backend.ts` 按现有封装添加类型和请求，认证参考 `src/api/user.ts`；不要照搬模板示例中的message/list结构。
+2. 页面放 `src/views/backend/<feature>/index.vue`。当前 `src/api/routes.ts` 使用显式组件映射，新增菜单component标识后也要新增映射，例如 `system/order/index` 映射到 `backend/orders/index`，否则显示未接入页面。
+3. 创建页面菜单及button/api子节点，接口填写完整模板，如 `GET /system/orders/:id`。永久基础节点通过增量迁移发布，不能只修改本机数据库。
+4. 角色关联实际节点。按钮使用 `src/utils/permission.ts` 的 `hasPermission('菜单code')` 配合v-if。code用于显隐，后端按方法和路径鉴权；隐藏按钮不能代替鉴权。
+5. 验证成功、参数错误、未登录、未授权、资源归属与重复写入。后端运行 `go build ./...`、`go vet ./...`；前端运行 `pnpm typecheck`、`pnpm build`。权限变更后刷新菜单或重新登录。
+
+用户端按相同流程将system目录换为api，并使用本端TokenCheck；配套后台动态菜单授权流程仅适用于system。
+
 ## 1. 先确定功能边界
 
 开始前明确：属于用户端api还是管理端system，输入输出是什么，是否登录、需要访问哪张表、能操作谁的数据、成功和失败是什么。

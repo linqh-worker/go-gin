@@ -82,6 +82,42 @@ go run ./cmd/api -f ./.env --module=all
 
 `GET /` 查看服务信息，`GET /api/` 查看API模块，`GET /status` 查看数据库、Redis状态，同时检查data中的组件状态。
 
+## 配套前端与启动
+
+后台前端仓库：[go-gin-web](https://github.com/linqh-worker/go-gin-web)，基于 Vue Pure Admin、Vue 3、TypeScript、Element Plus。前后端分仓维护，建议放在同级目录；配套前端是管理后台，不是用户端网站。
+
+先完成上述迁移、管理员创建和授予超管。后端启动时使用8089，与前端默认代理一致：
+
+```powershell
+# 后端仓库根目录，保持终端运行
+go run ./cmd/api -f ./.env --module=all --port=8089
+```
+
+另开PowerShell，在准备存放前端的目录执行；已经克隆则跳过clone：
+
+```powershell
+git clone https://github.com/linqh-worker/go-gin-web.git
+Set-Location go-gin-web
+# 要求Node >=22.22.1、pnpm >=11；没有pnpm时先安装
+node --version
+npm install -g pnpm@11
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+访问终端显示的地址，默认 `http://127.0.0.1:8848`，使用刚创建的管理员、密码和图片验证码登录。没有默认账号密码；没有菜单先检查是否完成了 `--grant-super`。
+
+开发链路：浏览器8848 → Vite代理 → 后端8089 → MySQL/Redis。前端 `vite.config.ts` 将 `/system`、`/public`、`/status` 原路径转发，不删除路径前缀。后端配置默认8088，如需使用8088，在前端终端指定代理目标并启动：
+
+```powershell
+$env:BACKEND_TARGET = "http://127.0.0.1:8088"
+pnpm dev
+```
+
+修改目标后重启前端。连接失败先核对端口和后端 `/status`；403检查菜单接口授权。生产部署需构建前端并配置Web服务器代理，Vite开发代理不进入构建产物。
+
+新增接口参考[接口开发速查及生成命令](docs/DEVELOPMENT.md#接口开发速查)。
+
 ## 架构与目录
 
 ```text
